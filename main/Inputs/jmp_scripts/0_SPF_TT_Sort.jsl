@@ -7,7 +7,7 @@ spf_tt = Function(
 
 ////Test Time Analysis///
 curr_Script_path = rootpath;
-output_path = "C:\Users\eoghanoc\Source\Repos\Py_TPI_Tracker\Outputs\";
+output_path = "C:\Users\ianimash\source\repos\github\py-tpi-tracker\Outputs\";
 
 dt_bin = Open(output_path||"{{csv}}0_RawData_Matching_WFRS.csv");
 // dt_bin = Current Data Table(Data Table ("0_RawData_Matching_WFRS")); - Intended change from wrapper

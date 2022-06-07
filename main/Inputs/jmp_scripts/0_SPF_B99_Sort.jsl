@@ -4,7 +4,7 @@ lot_list2 = new_engID;
 lot_list3= newnew_engID;
 
 curr_Script_path = Get Current Directory();
-output_path = "C:\Users\eoghanoc\Source\Repos\Py_TPI_Tracker\Outputs\";
+output_path = "C:\Users\ianimash\source\repos\github\py-tpi-tracker\Outputs\";
 
 /********Script Start*******/
 //dt=current data table();

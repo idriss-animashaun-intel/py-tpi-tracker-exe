@@ -11,7 +11,7 @@ dt_bin << clear select << clear column selection;
 dt_bin << Clear Row States;
 
 curr_Script_path = rootpath;
-output_path = "C:\Users\eoghanoc\Source\Repos\Py_TPI_Tracker\Outputs\";
+output_path = "C:\Users\ianimash\source\repos\github\py-tpi-tracker\Outputs\";
 
 //Extract IB FB by Lot
 //IB_FB_Split = dt_bin_bdef << Split(

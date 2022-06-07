@@ -10,9 +10,9 @@ hvqk_app_rate = Function(
 //----------
 
 JSL_Script_path	   = rootpath;
-SQL_output_path    = "C:\Users\eoghanoc\Source\Repos\Py_TPI_Tracker\generated_files\pull_hvqk_data.csv";
+SQL_output_path    = "C:\Users\ianimash\source\repos\github\py-tpi-tracker\generated_files\pull_hvqk_data.csv";
 curr_Script_path = rootpath;
-output_path = "C:\Users\eoghanoc\Source\Repos\Py_TPI_Tracker\Outputs\";
+output_path = "C:\Users\ianimash\source\repos\github\py-tpi-tracker\Outputs\";
 
 DEBUG = 0;
 

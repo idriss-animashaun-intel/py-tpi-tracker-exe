@@ -3,8 +3,8 @@ bin_history = Function(
 {rootpath},
 // Local vars
 {},
-SQL_output_path    = "C:\Users\eoghanoc\Source\Repos\Py_TPI_Tracker\generated_files\historic_data.csv";
-output_str	   = "C:\Users\eoghanoc\Source\Repos\Py_TPI_Tracker\Outputs\";
+SQL_output_path    = "C:\Users\ianimash\source\repos\github\py-tpi-tracker\generated_files\historic_data.csv";
+output_str	   = "C:\Users\ianimash\source\repos\github\py-tpi-tracker\Outputs\";
 
 table = Open(SQL_output_path);
 table << Set Name("Historic_raw_data");

@@ -5,11 +5,11 @@ primary_jmp_script = Function(
 {},
 // Body of code
 
-JSL_Script_path    = "C:\Users\eoghanoc\Source\Repos\Py_TPI_Tracker\";
+JSL_Script_path    = "C:\Users\ianimash\source\repos\github\py-tpi-tracker\";
 SQL_output_path    = JSL_Script_path||"generated_files/pull_raw_kappa_data.csv";
-JSL_Script_pat = "C:\Users\eoghanoc\Source\Repos\Py_TPI_Tracker\Inputs\jmp_scripts\";
+JSL_Script_pat = "c:\Users\ianimash\source\repos\github\py-tpi-tracker\Inputs\jmp_scripts\";
 JSL_main	   = JSL_Script_pat||"primary_jmp_script.jsl";
-output_str     = "C:\Users\eoghanoc\Source\Repos\Py_TPI_Tracker\";
+output_str     = "C:\Users\ianimash\source\repos\github\py-tpi-tracker\";
 output_str_jrn = output_str||"Outputs/KappaReport_"||old_engID||"_"||new_engID||"_"||newnew_engID||".jrn";
 
 DEBUG = 0;
