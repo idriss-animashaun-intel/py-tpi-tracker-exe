@@ -1,0 +1,70 @@
+SELECT
+    v0.lot AS lot
+    ,v0.operation AS operation
+    ,dt.site_id AS site_id
+    ,dt.interface_bin AS IBIN
+    ,v0.test_end_date_time AS test_end_date
+    ,v0.program_name AS program_name
+    ,v0.wafer_id AS wafer_id
+    ,dt.sort_x AS sort_x
+    ,dt.sort_y AS sort_y
+    ,dt.sort_partialwafer_id AS WFR_TRAY
+    ,dt.carrier_x AS T_X
+    ,dt.carrier_y AS T_Y
+    ,t0.test_name AS test_name
+    ,pr.numeric_result AS numeric_result
+FROM 
+    A_Testing_Session v0
+INNER JOIN 
+    A_Test t0 ON t0.devrevstep = v0.devrevstep 
+    AND (t0.program_name = v0.program_name 
+        OR t0.program_name IS NULL 
+        OR v0.program_name IS NULL)  
+    AND (t0.temperature = v0.temperature 
+        OR (t0.temperature IS NULL 
+            AND v0.temperature IS NULL))
+INNER JOIN 
+    A_Device_Testing dt ON v0.lao_start_ww + 0 = dt.lao_start_ww
+    AND v0.ts_id + 0 = dt.ts_id
+LEFT JOIN (
+    SELECT 
+        /*+ ordered index(pr, npr_ts_i)*/
+        t0.t_id AS tid99
+        ,v0.ts_id AS TSID99
+        ,v0.lao_start_ww AS lww99
+        ,pr.ss_id
+        ,decode(A_SEQ_1_TO_9.seq,1,pr.NUMERIC_RESULT_1,2,pr.NUMERIC_RESULT_2,3,pr.NUMERIC_RESULT_3,4,pr.NUMERIC_RESULT_4,5,pr.NUMERIC_RESULT_5,6,pr.NUMERIC_RESULT_6,7,pr.NUMERIC_RESULT_7,8,pr.NUMERIC_RESULT_8,pr.NUMERIC_RESULT_9) AS numeric_result
+        ,decode(A_SEQ_1_TO_9.seq,1,pr.test_order_number_1,2,pr.test_order_number_2,3,pr.test_order_number_3,4,pr.test_order_number_4,5,pr.test_order_number_5,6,pr.test_order_number_6,7,pr.test_order_number_7,8,pr.test_order_number_8,pr.test_order_number_9) AS test_order_number
+        ,decode(A_SEQ_1_TO_9.seq,1,pr.active_inactive_core_vector_1,2,pr.active_inactive_core_vector_2,3,pr.active_inactive_core_vector_3,4,pr.active_inactive_core_vector_4,5,pr.active_inactive_core_vector_5,6,pr.active_inactive_core_vector_6,7,pr.active_inactive_core_vector_7,8,pr.active_inactive_core_vector_8,pr.active_inactive_core_vector_9) AS active_inactive_core_vector
+        ,decode(A_SEQ_1_TO_9.seq,1,pr.pass_fail_core_vector_1,2,pr.pass_fail_core_vector_2,3,pr.pass_fail_core_vector_3,4,pr.pass_fail_core_vector_4,5,pr.pass_fail_core_vector_5,6,pr.pass_fail_core_vector_6,7,pr.pass_fail_core_vector_7,8,pr.pass_fail_core_vector_8,pr.pass_fail_core_vector_9) AS pass_fail_core_vector
+        ,decode(A_SEQ_1_TO_9.seq,1,pr.mask_vector_1,2,pr.mask_vector_2,3,pr.mask_vector_3,4,pr.mask_vector_4,5,pr.mask_vector_5,6,pr.mask_vector_6,7,pr.mask_vector_7,8,pr.mask_vector_8,pr.mask_vector_9) AS mask_vector
+        ,decode(A_SEQ_1_TO_9.seq,1,pr.dt_id_1,2,pr.dt_id_2,3,pr.dt_id_3,4,pr.dt_id_4,5,pr.dt_id_5,6,pr.dt_id_6,7,pr.dt_id_7,8,pr.dt_id_8,pr.dt_id_9) AS dt_id
+        ,decode(A_SEQ_1_TO_9.seq,1,pr.LATEST_FLAG_1,2,pr.LATEST_FLAG_2,3,pr.LATEST_FLAG_3,4,pr.LATEST_FLAG_4,5,pr.LATEST_FLAG_5,6,pr.LATEST_FLAG_6,7,pr.LATEST_FLAG_7,8,pr.LATEST_FLAG_8,pr.LATEST_FLAG_9) AS latest_flag
+    FROM 
+        A_testing_Session v0
+    INNER JOIN 
+        A_Test t0 ON t0.devrevstep = v0.devrevstep 
+        AND (t0.program_name = v0.program_name 
+            OR t0.program_name is null 
+            OR v0.program_name is null)  
+        AND (t0.temperature = v0.temperature 
+            OR (t0.temperature IS NULL 
+            AND v0.temperature IS NULL))
+    AND      v0.lot In (##ENG_IDS##) 
+    AND      v0.operation = ##OPERATIONS##
+    AND      (t0.test_name LIKE  'VMU%') 
+    INNER JOIN 
+        A_Nine_Parametric_results pr ON v0.lao_start_ww = pr.lao_start_ww 
+        AND v0.ts_id = pr.ts_id 
+        AND t0.t_id = pr.t_id 
+    CROSS JOIN 
+        A_Seq_1_To_9
+    WHERE 1=1
+) pr ON v0.ts_id = pr.tsid99 AND v0.lao_start_ww = pr.lww99 AND t0.t_id = pr.tid99
+AND pr.dt_id = dt.dt_id
+WHERE 1=1
+    AND      v0.lot In (##ENG_IDS##) 
+    AND      (t0.test_name LIKE  'VMU%')
+    AND      v0.operation = (##OPERATIONS##)
+    AND      dt.interface_bin != 93 
+    AND      pr.numeric_result Is Not Null

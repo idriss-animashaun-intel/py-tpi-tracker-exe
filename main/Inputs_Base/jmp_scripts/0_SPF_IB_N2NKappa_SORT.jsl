@@ -1,0 +1,571 @@
+new_to_new_kappa = Function(
+// Function arg
+{rootpath},
+// Local vars
+{},
+// Body of code
+
+
+///////N2N IB Kappa, WaferMap and Switches - Removed BinDesc/////////
+dt_bin = Current Data Table();                                                               
+dt_bin << clear select << clear column selection;                                           
+dt_bin << Clear Row States;
+              
+curr_Script_path = rootpath;
+output_path = "out_path";
+
+
+//Extract IB FB by Lot
+IB_FB_Split = dt_bin << Split(
+    Split By( :LOT_OP ),
+    Split( :IBIN,:FBIN ),
+    Group( :WAFER_ID, :SORT_X, :SORT_Y ),
+    Remaining Columns( Drop All ),
+   output table("IB_FB_Split_table")
+);
+
+//get Column Names                                       
+AllWfrs_colnames = IB_FB_Split << get column names(String);                
+AllWfrs_IBINcols={};  
+AllWfrs_FBINcols={};                                            
+
+//Extract columns with IBIN/FBIN in name (i.e. nlots)
+for(i = 1, i<=ncols(IB_FB_Split), i++, 
+     if(
+        contains(AllWfrs_colnames[i], "IBIN"),insertinto(AllWfrs_IBINcols, AllWfrs_colnames[i]),
+        contains(AllWfrs_colnames[i], "FBIN"),insertinto(AllWfrs_FBINcols, AllWfrs_colnames[i])
+     )
+);
+
+//If more than two lots, do N2N Kappa/analysis 
+if( nitems(AllWfrs_IBINcols) > 2,
+    N2N_Kappa = 1,
+    N2N_Kappa = 0
+);  
+
+//Create reference to columns with Old and new lot data - For accurate O2N/N2N table
+for(i = 1, i<=nitems(AllWfrs_IBINcols), i++, 
+     if(
+        contains(AllWfrs_IBINcols[i], old_openg), oldLot_IBCol = AllWfrs_IBINcols[i],
+        contains(AllWfrs_IBINcols[i], new_openg), newLot1_IBCol = AllWfrs_IBINcols[i],
+        if(N2N_Kappa & contains(AllWfrs_IBINcols[i], newnew_openg), newLot2_IBCol = AllWfrs_IBINcols[i]);
+    );
+    if(
+        contains(AllWfrs_FBINcols[i], old_openg), oldLot_FBCol = AllWfrs_FBINcols[i],
+        contains(AllWfrs_FBINcols[i], new_openg), newLot1_FBCol = AllWfrs_FBINcols[i],
+        if(N2N_Kappa & contains(AllWfrs_FBINcols[i], newnew_openg), newLot2_FBCol = AllWfrs_FBINcols[i]);
+    );      
+);
+
+//Check for missing rows and exclude them - Sorts out issue of mismatched wafers
+ todeleterows = IB_FB_Split << get rows where(or(ismissing(as column(newLot1_IBCol)), ismissing(as column(newLot2_IBCol))));  
+ IB_FB_Split << delete rows(todeleterows);
+ 
+//Check if IB's match and Add columns with switching info
+IB_FB_Split<<New Column( "N2N_IBSwitch",Character,Nominal,
+    Formula(
+         if(
+              (as column(newLot1_IBCol)) != (as column(newLot2_IBCol)), char (as column(newLot1_IBCol)) || ">" || char(as column(newLot2_IBCol)),
+              .  //Executes when upper expression is not true.
+              //Can also use '.' character to leave blank.
+            )
+         )
+);
+
+IB_FB_Split<<New Column( "O2N_Switch",Character,Nominal,
+    Formula(
+         if(
+              (as column(oldLot_IBCol)) != (as column(newLot1_IBCol)), char (as column(oldLot_FBCol)) || ">" || char(as column(newLot1_FBCol)),
+              .  //Executes when upper expression is not true.
+              //Can also use '.' character to leave blank.
+            )
+         )
+);
+
+if(N2N_Kappa,
+    IB_FB_Split<<New Column( "N2N_Switch",Character,Nominal,
+        Formula(
+            if(
+                (as column(newLot1_IBCol)) != (as column(newLot2_IBCol)), char (as column(newLot1_FBCol)) || ">" || char(as column(newLot2_FBCol)),
+                .  //Executes when upper expression is not true.
+                //Can also use '.' character to leave blank.
+            )
+         )
+    )
+);
+
+IB_FB_Split<<New Column( "O2N_Switch_type",Character,Nominal,
+    Formula(
+        If(
+            ( as column(oldLot_IBCol) ) < 7 & ( as column(newLot1_IBCol) ) > 6, "G->B",
+             ( as column(oldLot_IBCol) ) > 6 & ( as column(newLot1_IBCol) ) < 7, "B->G",
+             ( as column(oldLot_IBCol) ) < 7 & ( as column(newLot1_IBCol) ) < 7 & ( as column(oldLot_IBCol) )
+             != ( as column(newLot1_IBCol) ), "G->G",
+             ( as column(oldLot_IBCol) ) > 7 & ( as column(newLot1_IBCol) ) >7 & ( as column(oldLot_IBCol) )
+             != ( as column(newLot1_IBCol) ), "B->B",            
+            "Same"       ////leave blank everything else is false.
+        )
+    )
+);
+if(N2N_Kappa,
+    IB_FB_Split<<New Column( "N2N_Switch_type",Character,Nominal,
+        Formula(
+            If(
+                ( as column(newLot1_IBCol) ) < 7 & ( as column(newLot2_IBCol) ) > 6, "G->B",
+                ( as column(newLot1_IBCol) ) > 6 & ( as column(newLot2_IBCol) ) < 7, "B->G",
+                ( as column(newLot1_IBCol) ) < 7 & ( as column(newLot2_IBCol) ) < 7 & ( as column(newLot1_IBCol) )!= ( as column(newLot2_IBCol) ), "G->G",
+                ( as column(newLot1_IBCol) ) > 7 & ( as column(newLot2_IBCol) ) >7 & ( as column(newLot1_IBCol) )!= ( as column(newLot2_IBCol) ), "B->B",            
+                "Same"       ////leave blank everything else is false.
+            )
+        )
+    );
+);
+
+
+IB_FB_Split << set label columns(:N2N_IBSwitch);
+//dt<<color by column(:Switch_type);
+IB_FB_Split<<select where(:N2N_Switch_type=="B->B");
+IB_FB_Split<<colors(Orange);
+IB_FB_Split<<select where(:N2N_Switch_type=="G->G");
+IB_FB_Split<<colors(Yellow);
+IB_FB_Split<<select where(:N2N_Switch_type=="B->G");
+IB_FB_Split<<colors(Red);
+IB_FB_Split<<select where(:N2N_Switch_type=="G->B");
+IB_FB_Split<<colors(Red);
+//IB_FB_Split<<select where(:N2N_Switch_type=="Same");
+//IB_FB_Split<<colors(Green);
+IB_FB_Split<< clear select;      
+
+////////////////////////////////////////////
+////Generate Total Kappa for all wafers////
+//////////////////////////////////////////
+col1 = column(IB_FB_Split, newLot1_IBCol);   
+col2 = column(IB_FB_Split, newLot2_IBCol);
+    //*********Generating Kappa Table*********//
+    dt = IB_FB_Split;                                   
+        //enter all the bins result                               
+        for(i = 1, i<=nrows(dt), i++,                             
+            col1m = col1 << get as matrix();                      
+            col2m = col2 << get as matrix();                      
+            if( contains(col2m,col1m[i])>0,,dt<<add rows(1);n = nrows(dt);col2[n]=col1m[i]);                         
+            if( contains(col1m,col2m[i])>0,,dt<<add rows(1);n = nrows(dt);col1[n]=col2m[i]);                         
+        );     
+    Cont = dt << Contingency(Y( col2 ),X( col1 ),             
+            Contingency Table(Count( 1 ),                         
+                Total %( 0 ),Col %( 0 ),Row %( 0 ),               
+                Expected( 0 ),Deviation( 0 ),Cell Chi Square( 0 ),
+                Col Cum( 0 ),Col Cum %( 0 ),Row Cum( 0 ),Row Cum %( 0 )                                              
+            ), 
+            Mosaic Plot( 0 ),Agreement Statistic( 1 ),            
+        );               
+    Rcont = Cont << Report;
+    //We dont need this table.
+    try(Rcont[Outlinebox("Bowker's Test")]<<close);
+    //Convert Kappa plot into a table. 
+    contdt = Rcont[Crosstabbox(1)]<<make into data table;
+    //Rename 1st Column
+    column(contdt,1)<<set name("Bins");                       
+    contdt<<delete columns("Cell");                           
+    try(contdt << delete columns("."));                       
+    try(contdt << select where(as column(1)==".")<<delete rows);
+
+    //Create base template for Final Kappa Table
+    AllN2N_IBKappaReport = new window("Report",                      
+            panelbox("",                                  
+                 kappaob = outlinebox("Kappa Summary: ALLWFRS  NEW => NEW", 
+                 Kappasum = hlistbox(),                           
+                 outlinebox("FROM(LEFT)= "||new_openg|| " , TO(TOP/RIGHT)="||newnew_openg,                            
+                            hlb = Hlistbox()                      
+                 ),                                        
+                 //kappaob = outlinebox("Kappa"),            
+                 sumbox = outlinebox("Summary")            
+				) 
+          )                                            
+     );  
+    //Initialise values needed for Building Final Kappa Table            
+    col1values = column(contdt,1)<< get as matrix;                          
+    NoSwitch ={}; GoodtoBad ={}; BadtoGood ={}; BadtoBad ={}; GoodtoGood ={};                
+    
+    //Populates Report template above with Formatted Kappa table
+    for(i = 1, i<=ncols(contdt), i++,                         
+            col = column(contdt,i);                               
+            colname = col << get name;                            
+            colvalues = col << get as matrix;                     
+            if(length(colname)==2,
+                //This is new Bin 
+                colsoftbin = left(colname,2),
+                colsoftbin = left(colname,1)
+            );                      
+            hlb << append(vlb = Vlistbox(colnametb = textbox(colname)));                                             
+            colnametb << set width(40)<< justify text(Center)<< set font size(11);                                   
+            for(j = 1, j<=nrows(contdt), j++,                     
+                if(length( col1values[j])==2,
+                    //This is Old bin                     
+                    rowsoftbin = left(col1values[j],2),           
+                    rowsoftbin = left(col1values[j],1),           
+                );                                                
+                vlb<<append(bbox = borderbox(tb = textbox(char(colvalues[j]))));                                     
+                tb << set width(40) << justify text(Center)<< set font size(11) ;                                    
+                if(                                               
+                    i == 1, tb << font color(15),                 
+                    colvalues[j]>0 & i>1 & col1values[j]==colname,
+                        tb << Set Font Style( "Bold" );           
+                        bbox << set background color (4);         
+                        insertinto(NoSwitch,colvalues[j])         
+                    ,                                             
+                    colvalues[j]>0 & i>1 & num(rowsoftbin)<7 & num(colsoftbin)>6,
+                        tb << Set Font Style( "Bold" );           
+                        bbox << set background color (38);         
+                        insertinto(GoodtoBad,colvalues[j])      
+                    ,
+                    colvalues[j]>0 & i>1 & num(rowsoftbin)>6 & num(colsoftbin)<7,
+                        tb << Set Font Style( "Bold" );           
+                        bbox << set background color (38);         
+                        insertinto(BadtoGood,colvalues[j])      
+                    ,                                             
+                    colvalues[j]>0 & i>1 & num(rowsoftbin)>6 & num(colsoftbin)>6,
+                        tb << Set Font Style( "Bold" );           
+                        bbox << set background color (38);         
+                        insertinto(BadtoBad,colvalues[j])
+                    ,
+                    colvalues[j]>0 & i>1 & num(rowsoftbin)<7 & num(colsoftbin)<7,
+                        tb << Set Font Style( "Bold" );           
+                        bbox << set background color (38);         
+                        insertinto(GoodtoGood,colvalues[j])
+                    ,       
+                );                                                
+            ); 
+     );
+     
+     
+     //Extract Kappa value from Contingency plot
+     
+     try(
+        if(
+            JMPVersion()=="9.?", kappa = Rcont[numbercolbox(7)]<<get;, //If JMP 9, use this line
+            kappa = Rcont[numbercolbox(1)]<<get;  //If any other JMP version, use this line
+            );        
+            kappa = (round( kappa[1],8));                     
+        ,      
+            kappa = "Not Available";                              
+        ); 
+     
+     //Extract Sigma Value from Contingency Plot
+     try(
+        if(
+            JMPVersion()=="9.?", sigma = Rcont[numbercolbox(8)]<<get; //If JMP 9, use this line
+            ,
+            sigma = Rcont[numbercolbox(2)]<<get;  //If any other JMP version, use this line
+            );           
+            sigma = (round( sigma[1],8));                     
+        ,      
+            sigma = "Not Available";                              
+        );
+     
+     //kappaob << append(
+     Kappasum << append(
+        tablebox(                                             
+                numbercolbox("Kappa",{kappa}),                            
+                numbercolbox("Sigma", {sigma}),
+                numbercolbox("LCI ", {(kappa - (2*sigma))})),                   
+                
+         ); 
+     
+     sumall = sum(sum(NoSwitch), sum(GoodtoBad), sum(BadtoGood), sum(BadtoBad), sum(GoodtoGood));                                        
+               
+        sumbox<<append(                                           
+            tablebox(                                             
+                stringcolbox("Type",{"NoSwitch", "GoodtoBad" , "BadtoGood", "BadtoBad", "GoodtoGood"}),                            
+                numbercolbox("N units", {sum(NoSwitch), sum(GoodtoBad), sum(BadtoGood), sum(BadtoBad), sum(GoodtoGood)}),                   
+                pcol = numbercolbox("% of Total", {sum(NoSwitch)/sumall, sum(GoodtoBad)/sumall, sum(BadtoGood)/sumall, sum(BadtoBad)/sumall, sum(GoodtoGood)/sumall})                                        
+            )  
+        );     
+               
+        pcol << set format(8,1,"Percent");
+        
+        //Save Kappa
+        allwfr_Kappa_tab << append (AllN2N_IBKappaReport  <<Get Picture);
+        
+        //AllN2N_IBKappaReport << save picture("../../Outputs/{{PIC}}AllWafers_N2N_IB_Kappa.jpg", jpg);
+        AllN2N_IBKappaReport<< close window;
+	cont << close window; 
+        save_path = output_path||"{{csv}}AllWfrs_N2N_Kappa_Table.csv";
+        close(contdt,save(save_path)); //close original Kappa table
+
+ /******* HOOKS FOR SPF
+ //Save Kappa table and die switch info       
+  text_string = "{{csv}}"; 
+  text_string = Remove(text_string,1,4);                
+  text_string = substitute(text_string,"\\","\");
+  text_string = "\\fm5sdev425.amr.corp.intel.com\"  || text_string  ;
+  text_string1 = text_string || "AllWfrs_IBin_Switches.csv";
+  text_string2 = text_string || "AllWfrs_N2N_Kappa_Table.csv";
+  text_string = text_string1 || "\!N" || text_string2;
+  save_path = output_path||"{{PIC}}AllWafers_N2N_IB_Kappa.txt";
+  st = Save Text File("save_path,text_string);
+*/
+
+//Delete missing rows. Table may be corrupted by Kappa formula
+current data table(IB_FB_Split);
+todeleterows = IB_FB_Split << get rows where(or(ismissing(as column(oldLot_IBCol)), ismissing(as column(newLot1_IBCol))));  
+IB_FB_Split << delete rows(todeleterows);
+
+//Extract each wafer
+summarize(WAFER_List = by(WAFER_ID));                                                                                                                                                                                      
+No_of_Wfrs=nitems(WAFER_List); 
+
+//Repeat rest of code for each wafer
+for(i_wafer=1 ,i_wafer<=No_of_Wfrs , i_wafer++,
+
+     //WaferRows=IB_FB_Split<<get rows where(:WAFER_ID==numWAFER_List[i_wafer]));
+     WaferRows=IB_FB_Split<<get rows where(num(:WAFER_ID)==num(WAFER_List[i_wafer]));
+     OneWfr_Subset = IB_FB_Split << subset( rows( WaferRows ) );
+
+    //Plots wafer switch map with colours;
+    biv=OneWfr_Subset<<Bivariate(
+        Y( :SORT_Y ),
+        X( :SORT_X ),
+        );
+    Rbiv = biv << Report;                                                                                                                                                                                              
+    Rbiv[Framebox(1)] << Frame Size( 1000, 500 );                                                                                                                                                                     
+    Rbiv[Framebox(1)] << Marker Size( 4 );                                                                                                                                                                             
+        
+    //Adds N2N_Switch data to plot
+    OneWfr_Subset<<select all rows();
+    OneWfr_Subset<<label;
+    OneWfr_Subset<< clear select;
+    
+    Wafer_Switch_Map = new window("Executive Summary GTS",                                                                                                                                                                
+        outlinebox("N2N_IB Switch MAP: Wfr "||WAFER_List[i_wafer]||" : "||new_openg||"->"||newnew_openg , Rbiv[Outline Box( 1 )])                                                                                                                                                    
+    );
+
+    //Save wafer switch map
+    switch_map_tab << append (Wafer_Switch_Map);
+    
+    wait (0.2);
+    Wafer_Switch_Map << close window;
+    //close(OneWfr_Subset);
+    
+    //Add a flag. Why? not sure yet.
+    OneWfr_Subset<<New Column( "Flag",
+        Character,
+        Nominal,
+        Formula(
+            If(
+                ( as column(newLot1_IBCol) ) == ( as column(newLot2_IBCol) ), "Diagonal",
+                ( as column(newLot1_IBCol) ) != ( as column(newLot2_IBCol) ), "Different HB",            
+                .       ////leave blank everything else is false.
+            )
+        )
+    );
+    //Add VIS_ID Column
+    VID_COL=OneWfr_Subset << New Column( "Visual_ID",Character, Formula( Char(:WAFER_ID) || "_" || Char(:SORT_X) || "_" || Char(:SORT_Y) ) );
+    VID_COL << Delete Formula(); 
+
+    summarize(ndielist = by(Visual_ID));
+    ndie = nitems(ndielist);
+
+    sumdt = OneWfr_Subset << Summary(                                    
+     Group( column(oldLot_IBCol), column(newLot1_IBCol), column(OneWfr_Subset, "Flag"), /*column(OneWfr_Subset, BinDef1),column(OneWfr_Subset, BinDef2)*/),                                         
+     :Name( "% of Total" ) ,                               
+     Link to original data table( 0 )                      
+     );     
+    sumdt << Sort( By( :N Rows ), Order( Descending ), replace table );
+
+//Assign reference to N2N columns in subset table.
+col1 = column(OneWfr_Subset, newLot1_IBCol);   
+col2 = column(OneWfr_Subset, newLot2_IBCol);
+    //*********Generating Kappa Table*********//
+    dt = OneWfr_Subset;                                   
+        //enter all the bins result                               
+        for(i = 1, i<=nrows(dt), i++,                             
+            col1m = col1 << get as matrix();                      
+            col2m = col2 << get as matrix();                      
+            if( contains(col2m,col1m[i])>0,,dt<<add rows(1);n = nrows(dt);col2[n]=col1m[i]);                         
+            if( contains(col1m,col2m[i])>0,,dt<<add rows(1);n = nrows(dt);col1[n]=col2m[i]);                         
+        );     
+    Cont = dt << Contingency(Y( col2 ),X( col1 ),             
+            Contingency Table(Count( 1 ),                         
+                Total %( 0 ),Col %( 0 ),Row %( 0 ),               
+                Expected( 0 ),Deviation( 0 ),Cell Chi Square( 0 ),
+                Col Cum( 0 ),Col Cum %( 0 ),Row Cum( 0 ),Row Cum %( 0 )                                              
+            ), 
+            Mosaic Plot( 0 ),Agreement Statistic( 1 ),            
+        );               
+    Rcont = Cont << Report;
+    //We dont need this table.
+    try(Rcont[Outlinebox("Bowker's Test")]<<close);
+    //Convert Kappa plot into a table. 
+    contdt = Rcont[Crosstabbox(1)]<<make into data table;
+    //Rename 1st Column
+    column(contdt,1)<<set name("Bins");                       
+    contdt<<delete columns("Cell");                           
+    try(contdt << delete columns("."));                       
+    try(contdt << select where(as column(1)==".")<<delete rows);
+
+    //Create base template for Final Kappa Table
+    N2N_IBKappaReport = new window("Report",                      
+             panelbox("",                                  
+                 kappaob = outlinebox("Kappa Summary: Wfr" || WAFER_List[i_wafer] || ", NEW => NEW.  # of Die = "||char(ndie),               
+                 //new             
+                 Kappasum = hlistbox(),
+                 outlinebox("FROM(LEFT)= "||new_openg|| " , TO(TOP/RIGHT)="||newnew_openg,                            
+                            hlb = Hlistbox()                      
+                 ),                                        
+                 //kappaob = outlinebox("Kappa"),            
+                 sumbox = outlinebox("Summary")            
+				)
+			)                                             
+     );  
+    //Initialise values needed for Building Final Kappa Table            
+    col1values = column(contdt,1)<< get as matrix;                          
+    NoSwitch ={}; GoodtoBad ={}; BadtoGood ={}; BadtoBad ={}; GoodtoGood ={};                
+    
+    //Populates Report template above with Formatted Kappa table
+    for(i = 1, i<=ncols(contdt), i++,                         
+            col = column(contdt,i);                               
+            colname = col << get name;                            
+            colvalues = col << get as matrix;                     
+            if(length(colname)==2,
+                //This is new Bin 
+                colsoftbin = left(colname,2),
+                colsoftbin = left(colname,1)
+            );                      
+            hlb << append(vlb = Vlistbox(colnametb = textbox(colname)));                                             
+            colnametb << set width(40)<< justify text(Center)<< set font size(11);                                   
+            for(j = 1, j<=nrows(contdt), j++,                     
+                if(length( col1values[j])==2,
+                    //This is Old bin                     
+                    rowsoftbin = left(col1values[j],2),           
+                    rowsoftbin = left(col1values[j],1),           
+                );                                                
+                vlb<<append(bbox = borderbox(tb = textbox(char(colvalues[j]))));                                     
+                tb << set width(40) << justify text(Center)<< set font size(11) ;                                    
+                if(                                               
+                    i == 1, tb << font color(15),                 
+                    colvalues[j]>0 & i>1 & col1values[j]==colname,
+                        tb << Set Font Style( "Bold" );           
+                        bbox << set background color (4);         
+                        insertinto(NoSwitch,colvalues[j])         
+                    ,                                             
+                    colvalues[j]>0 & i>1 & num(rowsoftbin)<7 & num(colsoftbin)>6,
+                        tb << Set Font Style( "Bold" );           
+                        bbox << set background color (38);         
+                        insertinto(GoodtoBad,colvalues[j])      
+                    ,
+                    colvalues[j]>0 & i>1 & num(rowsoftbin)>6 & num(colsoftbin)<7,
+                        tb << Set Font Style( "Bold" );           
+                        bbox << set background color (38);         
+                        insertinto(BadtoGood,colvalues[j])      
+                    ,                                             
+                    colvalues[j]>0 & i>1 & num(rowsoftbin)>6 & num(colsoftbin)>6,
+                        tb << Set Font Style( "Bold" );           
+                        bbox << set background color (38);         
+                        insertinto(BadtoBad,colvalues[j])
+                    ,
+                    colvalues[j]>0 & i>1 & num(rowsoftbin)<7 & num(colsoftbin)<7,
+                        tb << Set Font Style( "Bold" );           
+                        bbox << set background color (38);         
+                        insertinto(GoodtoGood,colvalues[j])
+                    ,       
+                );                                                
+            ); 
+     );
+     
+     
+     //Extract Kappa value from Contingency plot
+     
+     try(
+        if(
+            JMPVersion()=="9.?", kappa = Rcont[numbercolbox(7)]<<get;, //If JMP 9, use this line
+            kappa = Rcont[numbercolbox(1)]<<get;  //If any other JMP version, use this line
+            );        
+            kappa = (round( kappa[1],8));                     
+        ,      
+            kappa = "Not Available";                              
+        ); 
+     
+     //Extract Sigma Value from Contingency Plot
+     try(
+        if(
+            JMPVersion()=="9.?", sigma = Rcont[numbercolbox(8)]<<get; //If JMP 9, use this line
+            ,
+            sigma = Rcont[numbercolbox(2)]<<get;  //If any other JMP version, use this line
+            );           
+            sigma = (round( sigma[1],8));                     
+        ,      
+            sigma = "Not Available";                              
+        );
+     
+     //kappaob << append(
+     Kappasum << append(
+        tablebox(                                             
+                numbercolbox("Kappa",{kappa}),                            
+                numbercolbox("Sigma", {sigma}),
+                numbercolbox("LCI ", {(kappa - (2*sigma))})),                   
+                
+         ); 
+     
+     sumall = sum(sum(NoSwitch), sum(GoodtoBad), sum(BadtoGood), sum(BadtoBad), sum(GoodtoGood));                                        
+               
+        sumbox<<append(                                           
+            tablebox(                                             
+                stringcolbox("Type",{"NoSwitch", "GoodtoBad" , "BadtoGood", "BadtoBad", "GoodtoGood"}),                            
+                numbercolbox("N units", {sum(NoSwitch), sum(GoodtoBad), sum(BadtoGood), sum(BadtoBad), sum(GoodtoGood)}),                   
+                pcol = numbercolbox("% of Total", {sum(NoSwitch)/sumall, sum(GoodtoBad)/sumall, sum(BadtoGood)/sumall, sum(BadtoBad)/sumall, sum(GoodtoGood)/sumall})                                        
+            )  
+        );     
+               
+        pcol << set format(8,1,"Percent");
+        
+        //Save Kappa
+        wafer_kappa_tab << append (N2N_IBKappaReport);
+               
+        
+        cont << close window; 
+        N2N_IBKappaReport<< close window;                                 
+        //try(N2N_IBKappaReport_ForCleanKapa << close window;);             
+        //nw<< close window; 
+        
+ /* HOOKS FOR SPF       
+        ////Create txt file with Link to csv location for relevant PIC////
+        //Check if we have any switching die, i.e. if switch file exists.
+        
+        Wfr_IB_Switch_Only_Rows = dt<<get rows where(!ismissing(:N2N_Switch));
+        if(nrows(Wfr_IB_Switch_Only_Rows)>0,                             
+             
+            text_string = "{{csv}}"; 
+            text_string = Remove(text_string,1,4);                
+            text_string = substitute(text_string,"\\","\");            
+               
+            //text_string=Munger (text_string,1,"\\","\");          
+            //text_string=Munger (text_string,1,"\\","\");          
+            //text_string=Munger (text_string,1,"\\","\");          
+            //text_string=Munger (text_string,1,"\\","\");          
+            //text_string=Munger (text_string,1,"\\","\");          
+            //text_string=Munger (text_string,1,"\\","\");          
+               
+            //text_string = "\\HASGMDORDS01.ger.corp.intel.com\"  || text_string  ;                                    
+            text_string = "\\fm5sdev425.amr.corp.intel.com\"  || text_string  ;
+               
+                text_string = text_string || "AllWfrs_IBin_SwitchDieOnly.csv";          
+               // text_string = text_string_1 || "\!N" || text_string_2;                                               
+                //,                                                 
+               // text_string = text_string_1;   
+           
+           //Save Text File      
+           //st = Save Text File("../../Outputs/{{PIC}}Wafer_" || WAFER_List[i_wafer] || "_N2N_IB_Kappa.txt",text_string);    
+        );
+        */
+        
+        close(OneWfr_Subset,no save);                                       
+        close(sumdt,no save ); 
+        //close(contdt,save("../../Outputs/{{csv}}Wfr"||WAFER_List[i_wafer]||"_N2N_Kappa_Table.csv")); //close original Kappa table 
+             
+);
+              
+        
+close(IB_FB_Split, no save);
+//close(IB_Switch_Only_Table, no save);
+//close(dt_bin_bdef, no save);
+);

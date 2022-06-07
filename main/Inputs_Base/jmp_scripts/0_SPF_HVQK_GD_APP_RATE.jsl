@@ -1,0 +1,124 @@
+hvqk_app_rate = Function(
+// Function arg
+{rootpath},
+// Local vars
+{},
+// Body of code
+
+//----------
+///////HVQK Application Rate/////////
+//----------
+
+JSL_Script_path	   = rootpath;
+SQL_output_path    = "change_path";
+curr_Script_path = rootpath;
+output_path = "out_path";
+
+DEBUG = 0;
+
+table = Open(SQL_output_path);
+table << Set Name("0_HVQKData");
+
+//select raw data table, and clear  ROW/COLUMN selections
+dt_bin = current data table(Data Table ("0_HVQKData"));
+dt_bin = Current Data Table();
+dt_bin << New Column("LOT_OP", Character, Nominal, Formula(:LOT || "_" || Char(:OPERATION)));
+dt_bin << clear select << clear column selection;
+dt_bin << Clear Row States;
+
+
+//Select good die only and create new sub-table
+//dt_bin << Select Where(:IBIN >= 1 & :IBIN <= 6);
+//dt_bin << Subset(( Selected Rows ), Output Table Name ("dt_GOOD_DIE"));
+
+//dt_GOOD_DIE = Current Data Table();
+
+//Check if we have data for HVQK_MAX_INDICATOR or HVQK_VOLTAGE token
+hvqk_maxi = dt_bin << get rows where(!ismissing(as column(HVQK_MAX_INDICATOR)));
+hvqk_maxv = dt_bin << get rows where(!ismissing(as column(HVQK_VOLTAGE)));
+
+//UseHVQK = 0;
+nrows(hvqk_maxi);
+nrows(hvqk_maxv);
+
+
+
+//If ( condition1, expression1, condition2, expression2, ..., final-expression )
+//if(
+//	nrows(hvqk_maxi) > 0 , UseHVQK = "HVQK_MAX_INDICATOR",
+//    nrows(hvqk_maxv) > 0 ,  UseHVQK = "HVQK_VOLTAGE",
+//    UseHVQK = 0;
+//);
+
+//Create table with Application rate per HVQK_MAX_INDICATOR VALUE or print NO DATA
+//Table has LOT level and WAFER Level application rates.
+if( nrows(hvqk_maxi) > 0 ,
+dt_GD_App_Rate_Table = Tabulate(
+Remove Column Label( Grouping Columns( :LOT_OP ) ),
+Show Control Panel( 0 ),
+Show Tooltip( 1 ),
+Add Table(
+Column Table( Grouping Columns( :LOT_OP ),             Statistics( Column % ) ),
+Column Table( Grouping Columns( :WAFER_ID, :LOT_OP ),  Statistics( Column % ) ),
+Row Table   ( Grouping Columns(:HVQK_MAX_INDICATOR) )
+),
+SendToReport(
+Dispatch( {}, "Tabulate", OutlineBox, {Set Title( "GOOD_DIE_HVQK_APPLICATION_RATE" )} )
+//Dispatch( {}, "Tabulate", OutlineBox, {Set Title( "HVQK_MAX_INDICATOR" )} )
+)
+);
+dt_GD_App_Rate_Table = dt_GD_App_Rate_Table << Report;
+,
+
+nrows(hvqk_maxv) > 0 ,
+dt_GD_App_Rate_Table = Tabulate(
+Remove Column Label( Grouping Columns( :LOT_OP ) ),
+Show Control Panel( 0 ),
+Show Tooltip( 1 ),
+Add Table(
+Column Table( Grouping Columns( :LOT_OP ),             Statistics( Column % ) ),
+Column Table( Grouping Columns( :WAFER_ID, :LOT_OP ),  Statistics( Column % ) ),
+Row Table   ( Grouping Columns(:HVQK_VOLTAGE) )
+),
+SendToReport(
+Dispatch( {}, "Tabulate", OutlineBox, {Set Title( "GOOD_DIE_HVQK_APPLICATION_RATE" )} )
+//Dispatch( {}, "Tabulate", OutlineBox, {Set Title( "HVQK_VOLTAGE" )} )
+)
+);
+dt_GD_App_Rate_Table = dt_GD_App_Rate_Table << Report;
+,
+
+tb = OutlineBox("GOOD_DIE_HVQK_APPLICATION_RATE");
+tb << append (Text Box( " NO HVQK DATA ", << set font size(30), << set font style("BOLD")));
+dt_GD_App_Rate_Table = New Window( "GOOD_DIE_HVQK_APPLICATION_RATE", tb );
+);
+/*
+output = New Window("Kappa Report", <<Journal,
+vlb = V List Box(
+HVQK_tab = vlistbox();
+)
+);
+*/
+HVQK_tab << append (dt_GD_App_Rate_Table);
+
+save_path = output_path||"{{PIC}}HVQK_GD_application_Rate.jpg";
+dt_GD_App_Rate_Table << save picture(save_path, jpg);
+dt_GD_App_Rate_Table<< close window;
+
+);
+/****HOOKS NEEDED BY SPF///////////////
+
+// LogAnalyzer2 Tool for script: \\amodi-dev1.ltdauto.intel.com\Public\LogAnalyzer2
+// SCRIPT: https://wiki.ith.intel.com/display/jftp/HVQK+Application+Rate+Tool
+
+text_string = "LogAnalyzer2 Tool for script: \\amodi-dev1.ltdauto.intel.com\Public\LogAnalyzer2";
+text_string = text_string || "\!N";
+text_string = text_string || "HVQK APPLICATION RATE TOOL SCRIPT: https://wiki.ith.intel.com/display/jftp/HVQK+Application+Rate+Tool";
+
+//Save Text File
+//st = Save Text File("../../Outputs/{{PIC}}HVQK_GD_application_Rate.txt",text_string);
+
+
+///////END - HVQK Application Rate/////////
+
+*/

@@ -1,0 +1,62 @@
+SELECT 
+          S_X AS S_X
+         ,S_Y AS S_Y
+         ,WFR_TRY AS WFR_TRY
+         ,T_X AS T_X
+         ,T_Y AS T_Y
+         ,COMBO AS COMBO
+         ,Avg(interface_bin) AS interface_bin
+         ,HEADER AS HEADER
+FROM
+(
+SELECT 
+          wafer_id AS wafer_id
+         ,S_X AS S_X
+         ,S_Y AS S_Y
+         ,WFR_TRY AS WFR_TRY
+         ,T_X AS T_X
+         ,T_Y AS T_Y
+         ,COMBO AS COMBO
+         ,interface_bin AS interface_bin
+         ,program_name AS program_name
+         ,lot AS lot
+         ,operation AS operation
+         ,HEADER AS HEADER
+FROM
+(
+SELECT /*+  use_nl (dt) */ 
+          v0.wafer_id AS wafer_id
+         ,dt.sort_x AS S_X
+         ,dt.sort_y AS S_Y
+         ,dt.sort_partialwafer_id AS WFR_TRY
+         ,dt.carrier_x AS T_X
+         ,dt.carrier_y AS T_Y
+         ,v0.wafer_id  || '_' ||  dt.sort_x   || '_' ||   dt.sort_y AS COMBO
+         ,dt.sort_partialwafer_id  || '_' ||  dt.carrier_x   || '_' ||   dt.carrier_y AS T_COMBO
+         ,dt.interface_bin AS interface_bin
+         ,v0.program_name AS program_name
+         ,v0.lot AS lot
+         ,v0.operation AS operation
+         ,v0.lot || '_' || v0.operation || '_' ||  SUBSTR( v0.program_name ,11,5) AS HEADER
+FROM 
+       A_Testing_Session v0
+INNER JOIN A_Device_Testing dt ON v0.lao_start_ww + 0 = dt.lao_start_ww AND v0.ts_id + 0 = dt.ts_id
+WHERE 1=1
+ AND      v0.valid_flag = 'Y'  
+ AND      v0.test_end_date_time >= TRUNC(SYSDATE) - 60 
+ AND      v0.program_name Like '##TP_GENERIC##'
+ AND      dt.interface_bin != 93 
+)
+WHERE
+              COMBO In (##WFR_COORD##) 
+)
+GROUP BY 
+          S_X
+         ,S_Y
+         ,COMBO
+         ,WFR_TRY
+         ,T_X
+         ,T_Y
+         ,HEADER
+ORDER BY
+           3 Asc

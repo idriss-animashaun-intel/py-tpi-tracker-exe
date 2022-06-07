@@ -1,0 +1,81 @@
+
+SELECT 
+    LOT_OP AS LOT_OP
+    ,WFR AS WFR
+    ,WFR_X_Y AS WFR_X_Y
+    ,CELL_ID AS CELL_ID
+    ,IBIN AS IBIN
+    ,FBIN AS FBIN
+    ,program_name AS program_name##AVG_LIST##    
+FROM
+(
+    SELECT 
+        lot AS lot
+        ,operation AS operation
+        ,LOT_OP AS LOT_OP
+        ,WFR AS WFR
+        ,WFR_X_Y AS WFR_X_Y
+        ,CELL_ID AS CELL_ID
+        ,IBIN AS IBIN
+        ,FBIN AS FBIN
+        ,program_name AS program_name
+        ,wafer_id AS wafer_id
+        ,sort_x AS sort_x
+        ,sort_y AS sort_y##AS_LIST##
+        ,within_session_latest_flag AS within_session_latest_flag
+        ,numeric_result AS numeric_result
+    FROM
+    (
+        SELECT /*+  use_nl (dt) no_merge(pr) */ 
+            v0.lot AS lot
+            ,v0.operation AS operation
+            ,v0.lot  || '_'  ||  v0.operation AS LOT_OP
+            ,v0.wafer_id AS WFR
+            ,v0.wafer_id  || '_'  ||  dt.sort_x  || '_' ||  dt.sort_y AS WFR_X_Y
+            ,dt.interface_bin AS IBIN
+            ,dt.functional_bin AS FBIN
+            ,v0.program_name AS program_name
+            ,v0.wafer_id AS wafer_id
+            ,dt.cell_id AS CELL_ID 
+            ,dt.sort_x AS sort_x
+            ,dt.sort_y AS sort_y##CASE_LIST##
+            ,dt.within_session_latest_flag AS within_session_latest_flag
+         ,pr.numeric_result AS numeric_result
+        FROM 
+            A_Testing_Session v0
+        INNER JOIN A_Test t0 ON t0.devrevstep = v0.devrevstep AND (t0.program_name = v0.program_name or t0.program_name is null or v0.program_name is null)  AND (t0.temperature = v0.temperature OR (t0.temperature IS NULL AND v0.temperature IS NULL))
+        AND t0.test_name IN (##PARAM_LIST##)
+        INNER JOIN A_Device_Testing dt ON v0.lao_start_ww + 0 = dt.lao_start_ww AND v0.ts_id + 0 = dt.ts_id
+        LEFT JOIN (
+            SELECT /*+ ordered index(pr, npr_ts_i)*/ t0.t_id AS tid99 , v0.ts_id AS TSID99, v0.lao_start_ww AS lww99, pr.ss_id
+                ,decode(A_SEQ_1_TO_9.seq,1,pr.NUMERIC_RESULT_1,2,pr.NUMERIC_RESULT_2,3,pr.NUMERIC_RESULT_3,4,pr.NUMERIC_RESULT_4,5,pr.NUMERIC_RESULT_5,6,pr.NUMERIC_RESULT_6,7,pr.NUMERIC_RESULT_7,8,pr.NUMERIC_RESULT_8,pr.NUMERIC_RESULT_9) AS numeric_result
+                ,decode(A_SEQ_1_TO_9.seq,1,pr.test_order_number_1,2,pr.test_order_number_2,3,pr.test_order_number_3,4,pr.test_order_number_4,5,pr.test_order_number_5,6,pr.test_order_number_6,7,pr.test_order_number_7,8,pr.test_order_number_8,pr.test_order_number_9) AS test_order_number
+                ,decode(A_SEQ_1_TO_9.seq,1,pr.active_inactive_core_vector_1,2,pr.active_inactive_core_vector_2,3,pr.active_inactive_core_vector_3,4,pr.active_inactive_core_vector_4,5,pr.active_inactive_core_vector_5,6,pr.active_inactive_core_vector_6,7,pr.active_inactive_core_vector_7,8,pr.active_inactive_core_vector_8,pr.active_inactive_core_vector_9) AS active_inactive_core_vector
+                ,decode(A_SEQ_1_TO_9.seq,1,pr.pass_fail_core_vector_1,2,pr.pass_fail_core_vector_2,3,pr.pass_fail_core_vector_3,4,pr.pass_fail_core_vector_4,5,pr.pass_fail_core_vector_5,6,pr.pass_fail_core_vector_6,7,pr.pass_fail_core_vector_7,8,pr.pass_fail_core_vector_8,pr.pass_fail_core_vector_9) AS pass_fail_core_vector
+                ,decode(A_SEQ_1_TO_9.seq,1,pr.mask_vector_1,2,pr.mask_vector_2,3,pr.mask_vector_3,4,pr.mask_vector_4,5,pr.mask_vector_5,6,pr.mask_vector_6,7,pr.mask_vector_7,8,pr.mask_vector_8,pr.mask_vector_9) AS mask_vector
+                ,decode(A_SEQ_1_TO_9.seq,1,pr.dt_id_1,2,pr.dt_id_2,3,pr.dt_id_3,4,pr.dt_id_4,5,pr.dt_id_5,6,pr.dt_id_6,7,pr.dt_id_7,8,pr.dt_id_8,pr.dt_id_9) AS dt_id
+                ,decode(A_SEQ_1_TO_9.seq,1,pr.LATEST_FLAG_1,2,pr.LATEST_FLAG_2,3,pr.LATEST_FLAG_3,4,pr.LATEST_FLAG_4,5,pr.LATEST_FLAG_5,6,pr.LATEST_FLAG_6,7,pr.LATEST_FLAG_7,8,pr.LATEST_FLAG_8,pr.LATEST_FLAG_9) AS latest_flag
+            FROM A_testing_Session v0
+            INNER JOIN A_Test t0 ON t0.devrevstep = v0.devrevstep AND (t0.program_name = v0.program_name or t0.program_name is null or v0.program_name is null)  AND (t0.temperature = v0.temperature OR (t0.temperature IS NULL AND v0.temperature IS NULL))
+            AND      v0.lot In (##ENG_IDS##)
+            INNER JOIN A_Nine_Parametric_results pr ON v0.lao_start_ww = pr.lao_start_ww AND v0.ts_id = pr.ts_id AND t0.t_id = pr.t_id CROSS JOIN A_Seq_1_To_9
+            WHERE 1=1
+            AND t0.test_name IN (##PARAM_LIST##)
+        ) pr ON v0.ts_id = pr.tsid99 AND v0.lao_start_ww = pr.lww99 AND t0.t_id = pr.tid99
+        AND pr.dt_id = dt.dt_id
+        WHERE 1=1
+        AND      v0.lot In (##ENG_IDS##)
+        AND      v0.test_end_date_time >= TRUNC(SYSDATE) - 180 
+        AND      dt.within_session_latest_flag = 'Y' 
+    )
+WHERE
+    LOT_OP In (##LOT_OP##)
+)
+GROUP BY 
+    LOT_OP
+    ,WFR
+    ,WFR_X_Y
+    ,CELL_ID
+    ,IBIN
+    ,FBIN
+    ,program_name

@@ -1,0 +1,164 @@
+//!
+Clear Log();
+Close All( Data Tables, NoSave );
+Close All( Journals, NoSave );
+Close All( Reports, NoSave );
+maintable = Open("##RAW_PARAM##");
+maintable << Set Name("O2N_distributions");
+maintable << save as("##O2N_DISTRIB##");
+
+filter999 = {"With999","No999"};
+report_tabs = tabbox();
+for(k=1,k<=Nitems(filter999),k++,
+    current data table(mainTable);
+    if(k==2,
+        for(i=1,i<=N Col(mainTable),i++,
+			ur = mainTable << get rows where(Column(mainTable, i)[] < -998);
+			Column(mainTable, i)[ur] = .;
+        )
+    );
+    Ins1={
+    ##PARAM_LIST##
+    };
+
+
+
+    nw = New Window("Distributions",
+        content = Fit Group(
+            for(i=1,i<=Nitems(Ins1),i++,
+                Oneway(
+                    Y( Ins1[i] ),
+                    X( :LOT_OP ),
+                    Means and Std Dev( 1 ),
+                    Box Plots( 1 ),
+                    Mean Lines( 1 ),
+                    Mean Error Bars( 1 ),
+                    Std Dev Lines( 1 ),
+                    X Axis Proportional( 0 ),
+                    Points Jittered( 1 ),
+                    SendToReport(
+                        Dispatch(
+                            {"Oneway Analysis of " || Ins1[i]},
+                            "Oneway Plot",
+                            FrameBox,
+                            {DispatchSeg(
+                                Box Plot Seg( 1 ),
+                                {Box Style( "Outlier" ), Line Color( "Red" )}
+                            ), DispatchSeg(
+                                Box Plot Seg( 2 ),
+                                {Box Style( "Outlier" ), Line Color( "Red" )}
+                            )}
+                        ),
+                        Dispatch(
+                            {},
+                            "Oneway Plot",
+                            FrameBox,
+                            {Row Legend(
+                                :LOT_OP,
+                                Color( 1 ),
+                                Color Theme( "JMP Default" ),
+                                Marker( 0 ),
+                                Marker Theme( "" ),
+                                Continuous Scale( 0 ),
+                                Reverse Scale( 0 ),
+                                Excluded Rows( 0 )
+                            )}
+                        )
+                    )
+                )
+            )
+        );
+        content <<{Arrange in Rows( 2 )};
+    );
+    nw2 = vlistbox(nw);
+    report_tabs << add("Old2New Distributions" || filter999[k],nw2);
+
+
+    nw << Close Window();
+    //output << Close Window();
+//); // 999filter Cutoff
+
+    old_new_list = {##LOT_OP_LIST##};
+    tag_list={"Old","New","NewNew"};
+    bivariate_save_loc = {};
+    ##BIVARIATE_SAVE##
+    table_save_loc = {};
+    ##TABLE_SAVE##
+
+    for(i=1,i<=Nitems(bivariate_save_loc),i++,
+	    table = current data table(Data Table ("O2N_distributions"));
+	    table = current data table();
+        comp = {};
+        Insert Into(comp,old_new_list[i]);
+        Insert Into(comp,old_new_list[i+1]);
+        table << Select Where(Contains(comp, :LOT_OP)>0);
+        table << Subset(Output Table(tag_list[i]||"_vs_"||tag_list[i+1]||"_rsquare"));
+        Data Table(tag_list[i]||"_vs_"||tag_list[i+1]||"_rsquare") << Stack(
+            columns(##COLUMN_LIST##
+            ),
+            Source Label Column( "Label" ),
+            Stacked Data Column( "Data" ),
+            Output Table(tag_list[i]||"_"||tag_list[i+1]||"_stack")
+        );
+        Data Table(tag_list[i]||"_"||tag_list[i+1]||"_stack") << Split(
+            Split By( :LOT_OP ),
+            Split( :Data ),
+            Group( :Label, :WFR_X_Y ),
+            Output Table(tag_list[i]||"_"||tag_list[i+1]||"_split"),
+            Remaining Columns( Drop All )
+        );
+        table = current data table(Data Table (tag_list[i]||"_"||tag_list[i+1]||"_split"));
+        table = current data table();
+        table <<save journal(table_save_loc[i]);
+
+        tmp = "Bivariate Fit of " || old_new_list[i] || " By " || old_new_list[i+1];
+        tmp2 = parse(tmp);
+        necessary_but_evil_workaround_due_to_renaming_shite = Expr(
+            nw= New Window(tag_list[i]||"_vs_"||tag_list[i+1]||"_rsquare_tab",
+                plot =Fit Group(
+                    for(j=1,j<=Nitems(Ins1),j++,
+                        Bivariate(
+                            Y( old_new_list[i] ),
+                            X( old_new_list[i+1] ),
+                            Where( :Label == Ins1[j] ),
+                            Fit Line( {Line Color( {213, 72, 87} )} ),
+                            SendToReport(
+                                Dispatch(
+                                    {},
+                                    tmp,
+                                    OutlineBox,
+                                    {Set Title(tag_list[i]||"_vs_"||tag_list[i+1]||"_"||Ins1[j])}
+                                )
+                            )
+                        )
+                    )
+                );
+                plot <<{Arrange in Rows( 2 )};
+                plot <<{set window title("XY_RSquarePlot_"||tag_list[i]||"_vs_"||tag_list[i+1])};
+            );
+        );
+        Eval( Substitute( Name Expr( necessary_but_evil_workaround_due_to_renaming_shite ), Expr(tmp),tmp) );
+        nw2 = vlistbox(nw);
+            report_tabs << add(tag_list[i] || "2" || tag_list[i+1] || filter999[k] || " rsquare",nw2);
+    
+        nw <<save journal(bivariate_save_loc[i]);
+        nw << Close Window();
+        table = current data table(Data Table (tag_list[i]||"_"||tag_list[i+1]||"_split"));
+        table = current data table();
+        close(table,nosave);
+        table = current data table(Data Table (tag_list[i]||"_"||tag_list[i+1]||"_stack"));
+        table = current data table();
+        close(table,nosave);
+        table = current data table(Data Table (tag_list[i]||"_vs_"||tag_list[i+1]||"_rsquare"));
+        table = current data table();
+        close(table,nosave);
+    );
+); //999filter Cutoff
+
+output = new window("Parametrics_Report",report_tabs);
+output << save journal("##JMP_JRNL##");
+Close All( Data Tables, NoSave );
+
+Wait(1); t = N Table(); If(t > 0, For(i=1, i < t+1, i++, Close(Data Table(1));););
+Close All( Journals, NoSave);
+Quit();

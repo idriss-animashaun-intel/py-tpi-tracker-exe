@@ -1,0 +1,210 @@
+spf_tt = Function(
+// Function arg
+{rootpath},
+// Local vars
+{},
+// Body of code
+
+////Test Time Analysis///
+curr_Script_path = rootpath;
+output_path = "out_path";
+
+dt_bin = Open(output_path||"{{csv}}0_RawData_Matching_WFRS.csv");
+// dt_bin = Current Data Table(Data Table ("0_RawData_Matching_WFRS")); - Intended change from wrapper
+dt = Current Data Table();                                    
+dt << clear select << clear column selection;                 
+dt << Clear Row States;  
+
+//Create table with only passing bins/only failing for GDTT and BDTT
+GoodBin_Rows = dt<<get rows where(:IBIN < 6);
+GoodBin_Table = dt << subset( rows( GoodBin_Rows ), Output table name ("GoodBins_Only"));
+
+BadBin_Rows = dt<<get rows where(:IBIN > 6);
+BadBin_Table = dt << subset( rows( BadBin_Rows ), Output table name ("BadBins_Only"));
+
+//Extract Mean and calculate difference
+GoodBin_Table_Summary = GoodBin_Table << Summary(
+			Group( :LOT_OP,:TESTPROGRAM ),
+			Mean( :TEST_TIME ),
+			Min( :TEST_TIME ),
+			Max( :TEST_TIME ),
+			Std Dev( :TEST_TIME ),
+			StdErr( :TEST_TIME )
+			
+		);
+Mean_GDTT = column(GoodBin_Table_Summary,4)<<get as matrix;     	
+GDTT_Diff = round(abs(Mean_GDTT[1] - Mean_GDTT[2]),2);
+
+BadBin_Table_Summary = BadBin_Table << Summary(
+			Group( :LOT_OP,:TESTPROGRAM ),
+			Mean( :TEST_TIME ),
+			Min( :TEST_TIME ),
+			Max( :TEST_TIME ),
+			Std Dev( :TEST_TIME ),
+			StdErr( :TEST_TIME )
+			
+		);
+Mean_BDTT = column(BadBin_Table_Summary,4)<<get as matrix;     	
+BDTT_Diff = round(abs(Mean_BDTT[1] - Mean_BDTT[2]),2);
+
+//Label and plot TT Data by TP
+GoodBin_Table<<color by column(:TESTPROGRAM);
+GDTT_Plot = GoodBin_Table << Oneway(
+	Y( :TEST_TIME ),
+	X( :TESTPROGRAM ),
+	Quantiles( 1 ),
+	Means and Std Dev( 1 ),
+	Plot Quantile by Actual( 1 )
+);
+
+BadBin_Table<<color by column(:TESTPROGRAM);
+BDTT_Plot = BadBin_Table << Oneway(
+	Y( :TEST_TIME ),
+	X( :TESTPROGRAM ),
+	Quantiles( 1 ),
+	Means and Std Dev( 1 ),
+	Plot Quantile by Actual( 1 )
+);
+
+
+
+//Add Legend to plots
+GDTT_analysis = GDTT_Plot << Report;
+GDTT_analysis[Framebox(1)] << Frame Size(500, 250)<< Marker Size (2) << Row Legend(:TESTPROGRAM,Marker Theme( "Hollow" )); 
+GDTT_analysis[Framebox(2)] << Frame Size(500, 250) << Marker Size(2) << Row Legend(:TESTPROGRAM,Marker Theme( "Hollow" ));  
+GDTT_analysis[NomAxisBox(1)] << Rotated Tick Labels(0);
+
+BDTT_analysis = BDTT_Plot << Report;
+BDTT_analysis[Framebox(1)] << Frame Size(500, 250)<< Marker Size (2) << Row Legend(:TESTPROGRAM,Marker Theme( "Hollow" ));
+BDTT_analysis[Framebox(2)] << Frame Size(500, 250) << Marker Size(2) << Row Legend(:TESTPROGRAM,Marker Theme( "Hollow" )); 
+BDTT_analysis[NomAxisBox(1)] << Rotated Tick Labels(0);
+
+
+//Change Name of Means table and add Min/Max value from Quantile Table
+GDTT_analysis[OutlineBox(3)] << set title("GDTT Summary");
+GDTT_analysis[TableBox(3)] << append(GDTT_analysis[NumberColBox("Minimum?")])<<append(GDTT_analysis[NumberColBox("Maximum?")]);
+GDTT_analysis[OutlineBox(3),NumberColBox("Level?")]<<Set Heading("Test Program");
+GDTT_analysis[OutlineBox(3),NumberColBox("Number?")]<<Set Heading("N Die");
+
+BDTT_analysis[OutlineBox(3)] << set title("BDTT Summary");
+BDTT_analysis[TableBox(3)] << append(BDTT_analysis[NumberColBox("Minimum?")])<<append(BDTT_analysis[NumberColBox("Maximum?")]);
+BDTT_analysis[OutlineBox(3),NumberColBox("Level?")]<<Set Heading("Test Program");
+BDTT_analysis[OutlineBox(3),NumberColBox("Number?")]<<Set Heading("N Die");
+
+
+TT_Summary = new window("TT Summary",
+    panelbox("",	                        
+        vlistbox( 
+            outlinebox("GDTT Plot",
+                GDTT_analysis[PictureBox(1)],
+                GDTT_analysis[OutlineBox(3)],
+                outlinebox("GDTT Diff = " || char(GDTT_Diff)),
+            )
+         
+        )
+    ),
+    panelbox("",
+        vlistbox( 
+            outlinebox("BDTT Plot",
+                BDTT_analysis[PictureBox(1)],
+                BDTT_analysis[OutlineBox(3)],
+                outlinebox("BDTT Diff = " || char(BDTT_Diff)),
+            )
+        )  
+    )     
+);
+
+//Save stuff
+ttime_tab << append (TT_Summary);
+// save_path = output_path||"{{PIC}}TestTime_Summary.jpg";
+// TT_Summary << save picture(save_path, jpg);
+
+TT_Brief = new window("TT Overview",
+	panelbox("",	                        
+        vlistbox( 
+        // If I have just 1 it works... otherwise I need to specify positions?
+            outlinebox("",GDTT_analysis[OutlineBox(3)]),
+            outlinebox("GDTT Diff = " || char(GDTT_Diff))
+         
+        )
+    ),
+    panelbox("",
+        vlistbox( 
+            outlinebox("",BDTT_analysis[OutlineBox(3)]),
+            outlinebox("BDTT Diff = " || char(BDTT_Diff))
+        )  
+    )     
+);
+
+save_path = output_path||"{{PIC}}TestTime_Brief.jpg";
+TT_Brief << save picture(save_path, jpg);
+
+// save_path = output_path||"{{csv}}TestTime_GDTT_Only.csv";
+// GoodBin_Table << save as(save_path);
+// save_path = output_path||"{{csv}}TestTime_BDTT_Only.csv";
+// BadBin_Table << save as(save_path);
+
+
+/* SPF HOOKS
+//Section used to generate path to data in PPT document
+text_string = "{{csv}}"; 
+text_string = Remove(text_string,1,4);                
+text_string = substitute(text_string,"\\","\");          
+               
+//text_string = "\\HASGMDORDS01.ger.corp.intel.com\"  || text_string  ;                                    
+text_string = "\\fm5sdev425.amr.corp.intel.com\"  || text_string  ;
+               
+text_string_1 = text_string || "TestTime_GDTT_Only.csv";
+text_string_2 = text_string || "TestTime_BDTT_Only.csv";         
+text_string = text_string_1 || "\!N" || text_string_2;                                               
+          
+//Save Text File                   
+st = Save Text File(output_path||"{{PIC}}TestTime.txt",text_string);
+ */
+          
+//Close everything
+TT_Summary <<close window;
+TT_Brief <<close window;
+GDTT_Plot <<close window;
+BDTT_Plot <<close window;
+close(GoodBin_Table,nosave);
+close(BadBin_Table,nosave);
+//close(GoodBin_Table_Summary,nosave);
+//close(BadBin_Table_Summary,nosave);
+
+//close(dt,nosave);
+
+/*
+TT_Summary = new window("TT Summary",
+	panelbox("Test_Time Summary",	
+		vlistbox(                        
+                 vlistbox( 
+                     outlinebox("GDTT Plot",
+						GDTT_analysis[PictureBox(1)],
+						GDTT_analysis[OutlineBox(3)],
+						outlinebox("GDTT Diff = " || char(GDTT_Diff)),
+						)
+                     
+                     ),
+                 vlistbox( 
+                     outlinebox("BDTT Plot",
+						BDTT_analysis[PictureBox(1)],
+						BDTT_analysis[OutlineBox(3)],
+						outlinebox("BDTT Diff = " || char(BDTT_Diff)),
+						)
+                     )  
+        )
+     )     
+);
+*/
+
+
+
+//For Debug
+//GDTT_analysis << show tree structure;
+//showproperties(GDTT_analysis[ifBox(1)] );
+//showproperties(BDTT_analysis[NumberColBox("Level?")]);
+//BDTT_analysis[OutlineBox(3),NumberColBox("Level?")]<<Set Heading("Program");
+//BDTT_analysis[OutlineBox(3),NumberColBox("Number?")]<<Set Heading("N Die");
+
+);

@@ -1,0 +1,77 @@
+/*BEGIN SQL*/
+SELECT 
+          lot AS lot
+		,operation AS operation
+		,site_id AS site_id
+		,FBIN AS FBIN
+		,test_end_date AS test_end_date
+		,program_name AS program_name
+		,wafer_id AS wafer_id
+		,sort_x AS sort_x
+		,sort_y AS sort_y
+         ,WFR_X_Y AS WFR_X_Y
+         ,WFR_TRAY AS WFR_TRAY
+         ,T_X AS T_X
+         ,T_Y AS T_Y
+	 ,test_name AS test_name
+         ,Supply AS Supply
+         ,Replace(Replace(Replace(Replace(Replace(Replace(string_result,',',';'),chr(9),' '),chr(10),' '),chr(13),' '),chr(34),''''),chr(7),' ') AS string_result
+         ,ModuleName AS ModuleName
+	 ,InstanceName AS InstanceName
+FROM
+(
+SELECT 
+          lot AS lot
+         ,operation AS operation
+         ,site_id AS site_id
+         ,FBIN AS FBIN
+         ,test_end_date AS test_end_date
+         ,program_name AS program_name
+         ,wafer_id AS wafer_id
+         ,sort_x AS sort_x
+         ,sort_y AS sort_y
+         ,WFR_X_Y AS WFR_X_Y
+         ,WFR_TRAY AS WFR_TRAY
+         ,T_X AS T_X
+         ,T_Y AS T_Y
+         ,test_name AS test_name
+         ,Supply AS Supply
+         ,string_result AS string_result
+         ,ModuleName AS ModuleName
+	 ,InstanceName AS InstanceName
+FROM
+(
+SELECT /*+  use_nl (dt) */ 
+          v0.lot AS lot
+         ,v0.operation AS operation
+         ,dt.site_id AS site_id
+         ,dt.functional_bin AS FBIN
+         ,v0.test_end_date_time AS test_end_date
+         ,v0.program_name AS program_name
+         ,v0.wafer_id AS wafer_id
+         ,dt.sort_x AS sort_x
+         ,dt.sort_y AS sort_y
+         ,v0.wafer_id  || '_' || dt.sort_x || '_' ||  dt.sort_y AS WFR_X_Y
+         ,dt.sort_partialwafer_id AS WFR_TRAY
+         ,dt.carrier_x AS T_X
+         ,dt.carrier_y AS T_Y
+         ,t0.test_name AS test_name
+         ,SUBSTR( t0.test_name , INSTR( t0.test_name ,'PIN:',1,1)+4 , INSTR( t0.test_name ,'TYPE:',1,1)-(INSTR( t0.test_name ,'PIN:',1,1)+5)) AS Supply
+         ,str.string_result AS string_result
+	 ,SUBSTR( t0.test_name , INSTR( t0.test_name ,'_',1,1)+1 , INSTR( t0.test_name ,':',1,1) - ( INSTR( t0.test_name ,'_',1,1)+1)) AS ModuleName
+	 ,SUBSTR( t0.test_name , INSTR( t0.test_name ,'::',1,1) +2 , INSTR( t0.test_name ,'|',1,1) - ( INSTR( t0.test_name ,'::',1,1)+2)) AS InstanceName
+FROM 
+       A_Testing_Session v0
+INNER JOIN A_Test t0 ON t0.devrevstep = v0.devrevstep AND (t0.program_name = v0.program_name or t0.program_name is null or v0.program_name is null)  AND (t0.temperature = v0.temperature OR (t0.temperature IS NULL AND v0.temperature IS NULL))
+INNER JOIN A_Device_Testing dt ON v0.lao_start_ww + 0 = dt.lao_start_ww AND v0.ts_id + 0 = dt.ts_id
+LEFT JOIN A_String_Result str ON v0.lao_start_ww = str.lao_start_ww AND v0.ts_id = str.ts_id AND dt.dt_id = str.dt_id AND t0.t_id = str.t_id
+WHERE 1=1
+ AND      v0.lot In (##ENG_IDS##) 
+ AND      dt.interface_bin = 99 
+ AND      (t0.test_name LIKE  'HWALARM%'
+) 
+ AND      str.string_result Like 'MODULE%' 
+ AND      v0.operation In (##OPERATIONS##) 
+)
+)
+/*END SQL*/

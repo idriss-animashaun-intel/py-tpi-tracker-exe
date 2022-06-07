@@ -1,0 +1,72 @@
+SELECT
+     v0.lot AS lot
+     ,v0.operation AS operation
+     ,v0.facility AS facility
+     ,v0.test_end_date_time AS test_end_date
+     ,v0.devrevstep AS devrevstep
+     ,v0.program_name AS TestProgram
+     ,v0.wafer_id AS wafer_id
+     ,dt.within_session_sequence_number AS within_session_sequence_number
+     ,dt.sort_x AS sort_x
+     ,dt.sort_y AS sort_y
+     ,dt.interface_bin AS ibin
+     ,dt.functional_bin AS fbin
+     ,CASE WHEN t0.test_name = 'HVQK_MAX_INDICATOR' THEN pr.numeric_result ELSE NULL END hvqk_max_indicator
+     ,CASE WHEN t0.test_name = 'HVQK_VOLTAGE' THEN pr.numeric_result ELSE NULL END hvqk_voltage
+FROM
+    A_Testing_Session v0
+INNER JOIN
+    A_Test t0 ON t0.devrevstep = v0.devrevstep
+    AND t0.program_name = v0.program_name
+    AND t0.temperature = v0.temperature
+INNER JOIN
+    A_Device_Testing dt ON v0.lao_start_ww = dt.lao_start_ww
+    AND v0.ts_id = dt.ts_id
+
+LEFT JOIN (
+	SELECT
+        /*+ ordered index(pr, npr_ts_i)*/
+        t0.t_id AS tid99
+        ,v0.ts_id AS TSID99
+        ,v0.lao_start_ww AS lww99
+        ,pr.ss_id
+        ,decode(A_SEQ_1_TO_9.seq,1,pr.NUMERIC_RESULT_1,2,pr.NUMERIC_RESULT_2,3,pr.NUMERIC_RESULT_3,4,pr.NUMERIC_RESULT_4,5,
+                pr.NUMERIC_RESULT_5,6,pr.NUMERIC_RESULT_6,7,pr.NUMERIC_RESULT_7,8,pr.NUMERIC_RESULT_8,pr.NUMERIC_RESULT_9) AS numeric_result
+        ,decode(A_SEQ_1_TO_9.seq,1,pr.dt_id_1,2,pr.dt_id_2,3,pr.dt_id_3,4,pr.dt_id_4,5,pr.dt_id_5,6,pr.dt_id_6,7,pr.dt_id_7,8,pr.dt_id_8,pr.dt_id_9) AS dt_id
+        ,decode(A_SEQ_1_TO_9.seq,1,pr.LATEST_FLAG_1,2,pr.LATEST_FLAG_2,3,pr.LATEST_FLAG_3,4,pr.LATEST_FLAG_4,5,pr.LATEST_FLAG_5,6,
+                pr.LATEST_FLAG_6,7,pr.LATEST_FLAG_7,8,pr.LATEST_FLAG_8,pr.LATEST_FLAG_9) AS latest_flag
+
+    FROM
+        A_testing_Session v0
+
+    INNER JOIN
+        A_Test t0 ON t0.devrevstep = v0.devrevstep
+        AND t0.program_name = v0.program_name
+        AND t0.temperature = v0.temperature
+    INNER JOIN
+        A_Nine_Parametric_results pr ON v0.lao_start_ww = pr.lao_start_ww
+        AND v0.ts_id = pr.ts_id
+        AND t0.t_id = pr.t_id CROSS JOIN A_Seq_1_To_9
+
+    WHERE		  v0.Flow_step In ('SORT','SDSSORT','SDTSORT')
+        AND	  v0.valid_flag = 'Y'
+        AND   v0.lot In (##ENG_IDS##)
+        AND   v0.operation In (##OPERATIONS##)
+        AND      v0.latest_flag = 'Y'
+        AND      (t0.test_name = 'HVQK_MAX_INDICATOR'
+	          OR t0.test_name = 'HVQK_VOLTAGE')
+)pr ON v0.ts_id = pr.tsid99 AND v0.lao_start_ww = pr.lww99 AND t0.t_id = pr.tid99 AND pr.latest_flag = v0.latest_flag AND pr.dt_id = dt.dt_id
+
+WHERE   v0.Flow_step In ('SORT','SDSSORT','SDTSORT')
+    AND      v0.valid_flag = 'Y'
+    AND      dt.within_session_latest_flag = 'Y'
+    AND      v0.test_end_date_time >= TRUNC(SYSDATE) - 180 
+    AND      v0.lot In (##ENG_IDS##)
+    AND      v0.operation In (##OPERATIONS##)
+    AND      v0.latest_flag = 'Y'
+    AND      dt.interface_bin < '7'
+	AND 	  v0.ts_id = dt.ts_id
+	AND	  v0.lao_start_ww = dt.lao_start_ww
+	AND	  dt.within_lao_latest_flag = 'Y'
+	AND      (t0.test_name = 'HVQK_MAX_INDICATOR'
+	            OR t0.test_name = 'HVQK_VOLTAGE')

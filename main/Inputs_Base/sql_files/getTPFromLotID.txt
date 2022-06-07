@@ -1,0 +1,17 @@
+SELECT
+           v0.lot AS lot
+          ,v0.program_name AS program_name
+          ,v0.wafer_id AS wafer_id
+          ,SUBSTR( tsv.string_value ,1, (LENGTH( tsv.string_value))- ((LENGTH( v0.program_name )))-6 ) AS TP_path
+          ,v0.Flow_step AS Flow_step
+          ,v0.operation AS operation
+ FROM
+        A_Testing_Session v0
+ LEFT JOIN A_Testing_Session_Attrib_Value tsv ON v0.lao_start_ww = tsv.lao_start_ww AND v0.ts_id = tsv.ts_id AND v0.program_name = tsv.program_or_recipe_name
+ LEFT JOIN A_Testing_Session_Attribute tsa ON tsv.program_or_recipe_name = tsa.program_or_recipe_name AND tsv.attribute_id = tsa.attribute_id
+ WHERE 1=1
+  AND      v0.lot In (##ENG_IDS##)
+  AND      v0.test_end_date_time >= TRUNC(SYSDATE) - 180 
+  AND      v0.operation In (##OPERATIONS##)
+  AND      tsa.attribute_name Like '%STPLPATH%'
+  AND      v0.test_end_date_time >= TRUNC(SYSDATE) - 180  

@@ -1,0 +1,30 @@
+SELECT UNIQUE
+	  v0.lot AS lot
+     ,v0.operation AS operation
+     ,v0.program_name AS TestProgram
+     ,dt.interface_bin AS ibin
+     ,dt.functional_bin AS fbin
+	 ,NVL(dt.interface_total_bin ,0) AS itbin
+	 ,NVL(dt.functional_total_bin ,0) AS ftbin
+     ,v0.wafer_id AS wafer_id
+     ,dt.test_time AS test_time
+     ,dt.sort_x AS sort_x
+     ,dt.sort_y AS sort_y
+     ,NVL(dt.sort_partialwafer_id ,'N\A') AS Tray
+     ,NVL(dt.carrier_x ,0) AS Tray_x
+     ,NVL(dt.carrier_y ,0) AS Tray_y
+     ,NVL(dt.site_id ,0) AS Site_ID
+
+  FROM A_Testing_Session v0
+INNER JOIN
+    A_Device_Testing dt ON v0.lao_start_ww = dt.lao_start_ww
+    AND v0.ts_id = dt.ts_id
+--WHERE 1=1
+  WHERE		  v0.Flow_step Like ('%SORT')
+     AND      dt.within_session_latest_flag = 'Y'
+     AND      v0.latest_flag = 'Y'
+     AND      v0.test_end_date_time >= TRUNC(SYSDATE) - 180 
+     AND      v0.lot In (##ENG_IDS##)
+     AND      v0.operation In (##OPERATIONS##)
+	 AND 	  v0.ts_id = dt.ts_id
+	 AND	  v0.lao_start_ww = dt.lao_start_ww

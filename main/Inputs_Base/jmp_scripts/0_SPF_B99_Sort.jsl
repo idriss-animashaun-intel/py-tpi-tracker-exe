@@ -1,0 +1,150 @@
+
+lot_list1= old_engID;
+lot_list2 = new_engID;
+lot_list3= newnew_engID;
+
+curr_Script_path = Get Current Directory();
+output_path = "out_path";
+
+/********Script Start*******/
+//dt=current data table();
+save_path = output_path||"{{csv}}AllWfrs_IBin_SwitchDieOnly.csv";
+dt = Open(save_path);
+
+// Set TEMP directory to store CB data
+OutputPath = substr(Convert File Path("$TEMP"),2);
+RightNow = char(Today());
+RightNow1 = char(Today()+1);
+
+// Define CB output script & datalog filenames
+OutputScript = RightNow || ".acs";
+OutputFile = "b99_" || RightNow1 || ".csv";
+//OutputFile = "great_name.csv";
+
+
+lot_list={};
+insertinto(lot_list,lot_list1);
+insertinto(lot_list,lot_list2);
+insertinto(lot_list,lot_list3);
+
+// Build the SQL to extract D2D parameters, write a CB script
+//Caption( "Getting data from CB", delayed( 0.1 ) );
+
+preamble ="<!--
+ User: tcathcar
+ Date: Mon Jun 26 10:39:53 2017
+ CB: CrystalBall_Proto
+-->
+
+<!-- %%%%%%%%%%%%%%%%%%%%%%% Collection %%%%%%%%%%%%%%%%%%%%%%% #TAG -->
+
+<collection type=material >
+  <group >
+    "|| lot_list1 ||"
+    "|| lot_list2 ||"
+    "|| lot_list3 ||"    
+  </group >
+</collection >
+
+<!-- %%%%%%%%%%%%%%%%%%%%%%% Parameters %%%%%%%%%%%%%%%%%%%%%%% #TAG -->
+
+<parameters  >
+  <param DOMAIN=SORT SITE=F24 OPERATION=6051 DATATYPE=DIEBIN TESTNAME=IB INCL=99,98 AKA=IBIN/>
+  <param DOMAIN=SORT SITE=F24 OPERATION=6051 DATATYPE=DIEBIN TESTNAME=FB AKA=FBIN/>
+  <param DOMAIN=SORT SITE=F24 OPERATION=6051 DATATYPE=DIERTD TESTNAME=ANOMALOUS_TEST_CURRENT AKA=ANOMALOUS_TEST_CURRENT/>
+</parameters>
+
+<!-- %%%%%%%%%%%%%%%%%%%%%%% Analysis %%%%%%%%%%%%%%%%%%%%%%% #TAG -->
+
+<analysis app=cb  >
+  TOOL=BINCOMP
+  /ACTIVE_TRACE_FORWARD_SITES=SVC
+  /OUTPUT='" || OutputPath || OutputFile|| "'
+  /FORMAT=CSV
+  /SEPARATEBY='None'
+  /FLCHAR
+  /AUTOSIBLING
+  /AUTOPARENT
+  /ASMERLIN
+  /IGNORE_VHL
+</analysis>
+";
+
+SQLscript = preamble;
+
+tb=textbox(SQLscript);
+tb<<save text ("$TEMP\" || OutputScript);
+
+// Run the CB extract script, and wait for output file to appear
+open("$TEMP\" || OutputScript);
+
+
+
+wait(40);
+//Caption (remove);
+
+i=0;
+flag=0;
+tt=0;
+while(flag < 2 & i < 700,
+	wait(3);
+	//activefiles = Files in Directory ("$TEMP");
+	tt=Rename File(convert file path("$TEMP")|| OutputFile, "SQL_"||OutputFile);
+	//Caption (remove);
+	If ((tt==1)  ,
+		flag=3;
+	);
+	i++;
+	//Caption( "Data from CB loading_"||Char(i)||"_"||Char(tt)||"_"||OutputFile, delayed( 0.1 ) );
+);
+//wait(20);
+//Caption (remove);
+//Caption( "CB done", delayed( 0.5 ) );
+
+//ParamRaw = Open(convert file path("$TEMP") || OutputFile);
+
+//wait(10);
+ParamRaw = Open(convert file path("$TEMP") || "SQL_"||OutputFile);
+//ParamRaw = Open(convert file path("$TEMP") || OutputFile);
+//wait(10);
+
+//Caption( "Building Tables", delayed( 0.1 ) );
+
+dx=current data table();
+dx << Set Name("B99 table");
+//column("WAFER") << Data Type ( Character);
+
+//colnames1 = DataTable("IB_Switches") << Get Column Names(String);
+colnames1 = dt << Get Column Names(String);
+colnames2 = DataTable("B99 table") << Get Column Names(String);
+N = N items(colnames2);
+//colnames2 = dx << Get Column Names();
+
+//Caption( colnames2[N], delayed( 0.1 ) );
+
+//colnames1 += colnames2[N];
+
+//colnames = colnames1 += (colnames2[N]);
+
+//switches_with_b99 = DataTable("IB_Switches") << Join(
+switches_with_b99 = dt << Join(
+With(DataTable("B99 table")),
+By Matching Columns(WAFER_ID==WAFER,SORT_X==X,SORT_Y==Y),
+Select(all),
+SelectWith("ANOMALOUS_TEST_CURRENT"),
+Include NonMatches(TRUE,FALSE),
+Preserve Main Table Order(),
+Output table name("test"));
+
+//dt << Update(With(switches_with_b99));
+
+//dt << save as("../../Outputs/{{csv}}AllWfrs_IBin_Switches.csv");
+
+switches_with_b99 << save as("../../Outputs/{{csv}}b99_switches.csv");
+wait(0.2);
+
+close(dt, no save);
+/*
+close(IB_FB_Split, no save);
+close(IB_Switch_Only_Table, no save);
+close(IB_FB_Split, no save);*/

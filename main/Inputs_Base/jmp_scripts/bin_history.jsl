@@ -1,0 +1,33 @@
+bin_history = Function(
+// Function arg
+{rootpath},
+// Local vars
+{},
+SQL_output_path    = "change_path";
+output_str	   = "out_path";
+
+table = Open(SQL_output_path);
+table << Set Name("Historic_raw_data");
+col_list = table << get column names(string);
+table = current data table(Data Table ("Historic_raw_data"));
+table = current data table();
+
+table2 = (table <<Tabulate(
+Show Tooltip( 1 ),
+Add Table(
+Column Table(
+Grouping Columns( :HEADER ),
+Analysis Columns( :INTERFACE_BIN ),
+Statistics( Max )
+),
+Row Table( Grouping Columns( :COMBO ) )
+)
+)) << Make Into Data Table;
+
+close(table,nosave);
+
+save_dir = output_str||"{{csv}}Historic_bin_data_grouped.csv";
+
+table2 << save as(save_dir);
+Quit();
+);

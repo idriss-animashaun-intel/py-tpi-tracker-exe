@@ -1,0 +1,233 @@
+primary_jmp_script = Function(
+// Function arg
+{old_engID,new_engID,newnew_engID, rootpath, old_openg, new_openg, newnew_openg,flow},
+// Local vars
+{},
+// Body of code
+
+JSL_Script_path    = "rootpath_1";
+SQL_output_path    = JSL_Script_path||"generated_files/pull_raw_kappa_data.csv";
+JSL_Script_pat = "dir_change";
+JSL_main	   = JSL_Script_pat||"primary_jmp_script.jsl";
+output_str     = "rootpath_1";
+output_str_jrn = output_str||"Outputs/KappaReport_"||old_engID||"_"||new_engID||"_"||newnew_engID||".jrn";
+
+DEBUG = 0;
+if (Length(newnew_engID) != 2, Write("Running NewNew"););
+if (Length(newnew_engID) == 2, Write("Not running NewNew"););
+
+TRIMMED_LOT_OP_LIST = {};
+Insert Into(TRIMMED_LOT_OP_LIST,old_openg);
+Insert Into(TRIMMED_LOT_OP_LIST,new_openg);
+Insert Into(TRIMMED_LOT_OP_LIST,newnew_openg);
+
+table = Open(
+SQL_output_path,
+columns(
+Column( "LOT", Character, Nominal )
+)
+);
+table << Set Name("0_All_RawData");
+col_list = table << get column names(string);
+table = current data table(Data Table ("0_All_RawData"));
+table = current data table();
+table << New Column("LOT_OP", Character, Nominal, Formula(:LOT || "_" || Char(:OPERATION)));
+// table << save as(output_str||"Outputs/{{csv}}0_All_RawData.csv");
+
+table << Select Where(Contains(TRIMMED_LOT_OP_LIST, :LOT_OP)>0);
+table << Subset(Output Table("0_RawData"));
+table = current data table(Data Table ("0_RawData"));
+table = current data table();
+close("0_All_RawData",nosave);
+table << New Column("O_N_NN", Character, Nominal, Formula(Contains(TRIMMED_LOT_OP_LIST,LOT_OP)));
+table << Sort( By(:O_N_NN), Replace Table);
+
+table << save as(output_str||"Outputs/{{csv}}0_RawData.csv");
+
+//---------------------
+// Get list of Wafers that are in all lots
+//---------------------
+// table << Select Where(Is missing(:LOT) | Is missing(:WAFER_ID)) << Delete Rows;
+summarize( WFRLOTLIST = By (:WAFER_ID,:LOT_OP));
+WFRLIST = WFRLOTLIST[1,0];
+summarize( LOTLIST = By (:LOT_OP) );
+NLOTS = N items(LOTLIST);
+
+FINAL_WFR_LIST = {};
+For (i=1, i < N items(WFRLIST), i++,
+if ( N rows(Loc(WFRLIST,WFRLIST[i])) == NLOTS, Insert Into(FINAL_WFR_LIST ,WFRLIST[i]));
+);
+
+For (i=1, i < N items(FINAL_WFR_LIST)+1, i++,
+FINAL_WFR_LIST[i] = num(FINAL_WFR_LIST[i]);
+);
+
+//---------------------
+//Create subset table with data only from wafers in all lots
+//---------------------
+
+temp_dt = data table("0_RawData");
+temp_dt << Select Where(Contains(FINAL_WFR_LIST, :WAFER_ID)>0);
+temp_dt << Subset(Output Table("0_RawData_Matching_WFRS"));
+// close(temp_dt, nosave);
+
+//---------------------
+// Select subset table for rest of scripts
+//---------------------
+table = current data table(Data Table ("0_RawData_Matching_WFRS"));
+table = current data table();
+
+table << New Column("TRAY_FULL", Character, Nominal, Formula(:TRAY || "_" || Char(:TRAY_X) || "_" || Char(:TRAY_Y)));
+table << New Column("SITE_NUM", Numeric, Continuous, Formula(If( Left( :SITE_ID, 1 ) == "A",
+Num( Right( :SITE_ID, 3 ) ) + 1000,
+If( Left( :SITE_ID, 1 ) == "B",
+Num( Right( :SITE_ID, 3 ) ) + 2000,
+If( Left( :SITE_ID, 1 ) == "C",
+Num( Right( :SITE_ID, 3 ) ) + 3000,
+If( Left( :SITE_ID, 1 ) == "D",
+Num( Right( :SITE_ID, 3 ) ) + 4000,
+Num( Right( :SITE_ID, 3 ) ) + 5000
+)
+)
+)
+)));
+wait(2);
+table << save as(output_str||"Outputs/{{csv}}0_RawData_Matching_WFRS.csv");
+Column("TRAY_FULL") << Delete Formula;
+Column("SITE_NUM") << Delete Formula;
+table << save as(output_str||"Outputs/{{csv}}0_RawData_Matching_WFRS.csv");
+
+table = current data table();
+table << Summary(
+Group( :WAFER_ID, :SORT_X, :SORT_Y, :TRAY_FULL),
+Max( :IBIN ),
+Max( :FBIN ),
+Max( :SITE_NUM ),
+Max( :ITBIN ),
+Max( :FTBIN ),
+Subgroup(:O_N_NN),
+Link to original data table( 0 )
+);
+table = current data table();
+
+//newnew_engID = "NA";
+for each row(
+if( Is Missing( :"Max(IBIN, 1)") , :"Max(IBIN, 1)"=93);
+if( Is Missing( :"Max(IBIN, 2)") , :"Max(IBIN, 2)"=93);
+if( Is Missing( :"Max(FBIN, 1)") , :"Max(FBIN, 1)"=9369);
+if( Is Missing( :"Max(FBIN, 2)") , :"Max(FBIN, 2)"=9369);
+if( Is Missing( :"Max(SITE_NUM, 1)") , :"Max(SITE_NUM, 1)"=1069);
+if( Is Missing( :"Max(SITE_NUM, 2)") , :"Max(SITE_NUM, 2)"=1069);
+if( Is Missing( :"Max(ITBIN, 1)") , :"Max(ITBIN, 1)"=93);
+if( Is Missing( :"Max(ITBIN, 2)") , :"Max(ITBIN, 2)"=93);
+if( Is Missing( :"Max(FTBIN, 1)") , :"Max(FTBIN, 1)"=9369);
+if( Is Missing( :"Max(FTBIN, 2)") , :"Max(FTBIN, 2)"=9369);
+if (Length(newnew_engID) != 2,
+if( Is Missing( :"Max(IBIN, 3)") , :"Max(IBIN, 3)"=93);
+if( Is Missing( :"Max(FBIN, 3)") , :"Max(FBIN, 3)"=9369);
+if( Is Missing( :"Max(ITBIN, 3)") , :"Max(ITBIN, 3)"=93);
+if( Is Missing( :"Max(FTBIN, 3)") , :"Max(FTBIN, 3)"=9369);
+if( Is Missing( :"Max(SITE_NUM, 3)") , :"Max(SITE_NUM, 3)"=1069);
+);
+);
+//table << Select Where(:NRows == 3);
+//table << Subset(Output Table("temp"));
+
+table << save as(output_str||"Outputs/{{csv}}0_RawData_Matching_WFRS_FINAL.csv");
+close(table,nosave);
+table = current data table();
+close(table,nosave);
+
+//table = current data table(Data Table ("0_RawData_Matching_WFRS"));
+table = current data table();
+//-----------------------------
+//-----------------------------
+//-----------------------------
+// INSERT and ENABLE Your Scripts BELOW
+//-----------------------------
+//-----------------------------
+//-----------------------------
+
+
+report_tabs = tabbox();
+// define switchmap and individual wafer kappa output for reporttab
+
+allwfr_Kappa_tab = vlistbox();
+HVQK_tab = vlistbox();
+ttime_tab = vlistbox();
+wafer_kappa_tab = vlistbox();
+switch_map_tab = vlistbox();
+
+
+
+Enable_script1 = 1;
+// if (Enable_script1 == 1,include(JSL_Script_pat || "0_SPF_Summary.jsl"););
+include(JSL_Script_pat || "0_SPF_Summary.jsl");
+if (Enable_script1 ==1, spf_sum(rootpath););
+wait(3);
+Write("Done SPF Summary");
+
+Enable_script2 = 1;
+// if (Enable_script2 == 1,include(JSL_Script_pat || "0_SPF_IB_O2NKappa_Sort.jsl"););
+include(JSL_Script_pat || "0_SPF_IB_O2NKappa_Sort.jsl");
+if (Enable_script2 ==1, old_to_new_kappa(rootpath););
+wait(3);
+Write("Done O2N Kappa");
+
+Enable_script3 = 1;
+if (Length(newnew_engID) == 2, Enable_script3 = 0;);
+// if (Enable_script3 == 1,include(JSL_Script_pat || "0_SPF_IB_N2NKappa_Sort.jsl"););
+if (Enable_script3 ==1,include(JSL_Script_pat || "0_SPF_IB_N2NKappa_Sort.jsl"););
+if (Enable_script3 ==1, new_to_new_kappa(rootpath););
+wait(3);
+Write("Done N2N Kappa");
+
+Enable_script4 = 1;
+// if (Enable_script4 == 1,include(JSL_Script_pat || "0_SPF_TT_Sort.jsl"););
+include(JSL_Script_pat || "0_SPF_TT_Sort.jsl");
+if (Enable_script4 ==1, spf_tt(rootpath););
+wait(3);
+Write("Done SPF TT Summary");
+
+Enable_script5 = 1;
+// if (AND((Enable_script5 == 1),(flow!="SDTSORT")),include(JSL_Script_pat || "0_SPF_HVQK_GD_APP_RATE.jsl"););
+include(JSL_Script_pat || "0_SPF_HVQK_GD_APP_RATE.jsl");
+if (AND((Enable_script5 == 1),(flow!="SDTSORT")), hvqk_app_rate(rootpath););
+wait(3);
+if (flow != "SDTSORT",Write("Done HVQK App rate"));
+
+// Enable_script6 = 1;
+// if (Enable_script6 == 1,include(JSL_Script_pat || "0_SPF_B99_Sort.jsl"););
+// include(JSL_Script_pat || "0_SPF_TT_Sort.jsl");
+// if (Enable_script6 ==1, spf_tt(rootpath););
+// wait(3);
+// Write("Done B99_SORT");
+
+nw = vlistbox(allwfr_Kappa_tab );
+nw2 = vlistbox(HVQK_tab <<Get Picture);
+nw3= vlistbox(ttime_tab <<Get Picture);
+nw4 = vlistbox(wafer_kappa_tab <<Get Picture);
+nw5 = vlistbox(switch_map_tab <<Get Picture);
+
+report_tabs << add("KappaData_All Wafers",nw);
+report_tabs << add("HVQK",nw2);
+report_tabs << add("TestTime",nw3);
+report_tabs << add("KappaByWafer",nw4);
+report_tabs << add("SwitchMap",nw5);
+
+output = new window("KappaSummary_TabsReport",report_tabs);
+output<<save journal(output_str_jrn);
+// -----------------------------
+// -----------------------------
+// -----------------------------
+// -----------------------------
+
+// Only close all open files if debug is disabled
+if( DEBUG == 0,
+Close All( Data Tables, NoSave );
+Wait(1); t = N Table(); If(t > 0, For(i=1, i < t+1, i++, Close(Data Table(1));););
+Close All( Journals, NoSave);
+Quit();
+);
+Caption( "Data Ready in Scripts folder as .jrn" );
+);

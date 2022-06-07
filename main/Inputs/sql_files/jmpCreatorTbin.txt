@@ -1,0 +1,23 @@
+//!
+clear globals();
+Names Default To Here(1);
+Close All( Data Tables, NoSave );
+Wait(1);
+t = N Table(); If(t > 0, For(i=1, i < t+1, i++, Close(Data Table(1));););
+Close All( Journals, NoSave);
+rightNow = char(Today());
+
+include("##RP##\Inputs\jmp_scripts\tbin_primary_jmp_script.jsl");
+testnumber = 0;
+oid = "##OENG##";
+nid = "##NENG##";
+nnid = "##NNENG##";
+rp = "##RP##";
+
+o_engop = "##OENGOP##";
+n_engop = "##NENGOP##";
+nn_engop = "##NNENGOP##";
+
+flow = "##FLOW##";
+
+x = primary_jmp_script(oid,nid,nnid,rp,o_engop, n_engop, nn_engop,flow);

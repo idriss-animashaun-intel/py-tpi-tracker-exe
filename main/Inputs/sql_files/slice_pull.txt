@@ -1,0 +1,166 @@
+/*BEGIN SQL*/
+SELECT 
+          lot AS lot
+         ,devrevstep AS devrevstep
+         ,flow_step AS flow_step
+         ,operation AS operation
+         ,test_end_date AS test_end_date
+         ,program_name AS program_name
+         ,wafer_id AS wafer_id
+         ,sort_x AS sort_x
+         ,sort_y AS sort_y
+         ,Tray AS Tray
+         ,Tray_X AS Tray_X
+         ,Tray_Y AS Tray_Y
+         ,interface_bin AS interface_bin
+         ,FBIN AS FBIN
+         ,test_name AS test_name
+         ,Combo_W_X_Y AS Combo_W_X_Y
+         ,Replace(Replace(Replace(Replace(Replace(Replace(string_result,',',';'),chr(9),' '),chr(10),' '),chr(13),' '),chr(34),''''),chr(7),' ') AS string_result
+         ,Incoming AS Incoming
+         ,Outgoing AS Outgoing
+         ,TestResult AS TestResult
+         ,Recovery_Flag AS Recovery_Flag
+FROM
+(
+SELECT 
+          lot AS lot
+         ,devrevstep AS devrevstep
+         ,flow_step AS flow_step
+         ,operation AS operation
+         ,test_end_date AS test_end_date
+         ,program_name AS program_name
+         ,wafer_id AS wafer_id
+         ,sort_x AS sort_x
+         ,sort_y AS sort_y
+         ,Tray AS Tray
+         ,Tray_X AS Tray_X
+         ,Tray_Y AS Tray_Y
+         ,interface_bin AS interface_bin
+         ,FBIN AS FBIN
+         ,test_name AS test_name
+         ,Combo_W_X_Y AS Combo_W_X_Y
+         ,Replace(Replace(Replace(Replace(Replace(Replace(string_result,',',';'),chr(9),' '),chr(10),' '),chr(13),' '),chr(34),''''),chr(7),' ') AS string_result
+         ,Incoming AS Incoming
+         ,Outgoing AS Outgoing
+         ,TestResult AS TestResult
+         ,CASE WHEN  Incoming != Outgoing  THEN '1' ELSE '0' END AS Recovery_Flag
+FROM
+(
+SELECT 
+          lot AS lot
+         ,devrevstep AS devrevstep
+         ,flow_step AS flow_step
+         ,operation AS operation
+         ,test_end_date AS test_end_date
+         ,program_name AS program_name
+         ,wafer_id AS wafer_id
+         ,sort_x AS sort_x
+         ,sort_y AS sort_y
+         ,Tray AS Tray
+         ,Tray_X AS Tray_X
+         ,Tray_Y AS Tray_Y
+         ,interface_bin AS interface_bin
+         ,FBIN AS FBIN
+         ,test_name AS test_name
+         ,Combo_W_X_Y AS Combo_W_X_Y
+         ,string_result AS string_result
+         ,Delimit_pipe AS Delimit_pipe
+         ,Delimit_colon AS Delimit_colon
+         ,Delimit_colon2 AS Delimit_colon2
+         ,Delimit_colon3 AS Delimit_colon3
+         ,SliceLength AS SliceLength
+         ,SUBSTR(  string_result  ,   Delimit_colon2 + 1  ,    SliceLength  - 1) AS Incoming
+         ,SUBSTR(  string_result  ,   Delimit_colon3  + 1 ,    SliceLength - 1  ) AS Outgoing
+         ,SUBSTR(  string_result  ,  Delimit_colon + 1  ,   SliceLength - 1  ) AS TestResult
+FROM
+(
+SELECT 
+          lot AS lot
+         ,devrevstep AS devrevstep
+         ,flow_step AS flow_step
+         ,operation AS operation
+         ,test_end_date AS test_end_date
+         ,program_name AS program_name
+         ,wafer_id AS wafer_id
+         ,sort_x AS sort_x
+         ,sort_y AS sort_y
+         ,Tray AS Tray
+         ,Tray_X AS Tray_X
+         ,Tray_Y AS Tray_Y
+         ,interface_bin AS interface_bin
+         ,FBIN AS FBIN
+         ,test_name AS test_name
+         ,Combo_W_X_Y AS Combo_W_X_Y
+         ,string_result AS string_result
+         ,Delimit_pipe AS Delimit_pipe
+         ,Delimit_colon AS Delimit_colon
+         ,Delimit_colon2 AS Delimit_colon2
+         ,Delimit_colon3 AS Delimit_colon3
+         ,Delimit_pipe - Delimit_colon AS SliceLength
+FROM
+(
+SELECT 
+          lot AS lot
+         ,devrevstep AS devrevstep
+         ,flow_step AS flow_step
+         ,operation AS operation
+         ,test_end_date AS test_end_date
+         ,program_name AS program_name
+         ,wafer_id AS wafer_id
+         ,sort_x AS sort_x
+         ,sort_y AS sort_y
+         ,Tray AS Tray
+         ,Tray_X AS Tray_X
+         ,Tray_Y AS Tray_Y
+         ,interface_bin AS interface_bin
+         ,FBIN AS FBIN
+         ,test_name AS test_name
+         ,Combo_W_X_Y AS Combo_W_X_Y
+         ,string_result AS string_result
+         ,INSTR(  string_result  ,'|',1,1) AS Delimit_pipe
+         ,INSTR(  string_result  ,':',1,1) AS Delimit_colon
+         ,INSTR(  string_result  ,':',1,2) AS Delimit_colon2
+         ,INSTR(  string_result  ,':',1,3) AS Delimit_colon3
+FROM
+(
+SELECT /*+  use_nl (dt) */ 
+          v0.lot AS lot
+         ,v0.devrevstep AS devrevstep
+         ,v0.flow_step AS flow_step
+         ,v0.operation AS operation
+         ,v0.test_end_date_time AS test_end_date
+         ,v0.program_name AS program_name
+         ,v0.wafer_id AS wafer_id
+         ,dt.sort_x AS sort_x
+         ,dt.sort_y AS sort_y
+         ,dt.sort_partialwafer_id AS Tray
+         ,dt.carrier_x AS Tray_X
+         ,dt.carrier_y AS Tray_Y
+         ,dt.interface_bin AS interface_bin
+         ,dt.functional_bin AS FBIN
+         ,t0.test_name AS test_name
+         ,v0.wafer_id  ||  '_' || dt.sort_x || '_' || dt.sort_y AS Combo_W_X_Y
+         ,str.string_result AS string_result
+FROM 
+A_Testing_Session v0
+INNER JOIN A_Test t0 ON t0.devrevstep = v0.devrevstep AND (t0.program_name = v0.program_name or t0.program_name is null or v0.program_name is null)  AND (t0.temperature = v0.temperature OR (t0.temperature IS NULL AND v0.temperature IS NULL))
+INNER JOIN A_Device_Testing dt ON v0.lao_start_ww + 0 = dt.lao_start_ww AND v0.ts_id + 0 = dt.ts_id
+LEFT JOIN A_String_Result str ON v0.lao_start_ww = str.lao_start_ww AND v0.ts_id = str.ts_id AND dt.dt_id = str.dt_id AND t0.t_id = str.t_id
+WHERE 1=1
+ AND      v0.valid_flag = 'Y' 
+ AND      dt.within_lao_latest_flag = 'Y' 
+ AND      v0.latest_flag = 'Y' 
+ AND      dt.interface_bin != 93 
+ AND      str.string_result Like '%TESTRESULT%' 
+ AND      t0.test_name Like '%::%SLICETRACKING%' 
+ AND      v0.lot In (##ENG_IDS##) 
+ AND      v0.operation In (##OPERATIONS##)
+)
+WHERE Combo_W_X_Y In (##WFR_COORD##) 
+)
+)
+)
+)
+WHERE Recovery_Flag ='1'
+/*END SQL*/

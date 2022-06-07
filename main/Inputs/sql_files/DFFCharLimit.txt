@@ -1,0 +1,14 @@
+SELECT /*+  use_nl (dt) */
+          t0.test_name AS test_name
+         ,Replace(Replace(Replace(Replace(Replace(Replace(str.string_result,',',';'),chr(9),' '),chr(10),' '),chr(13),' '),chr(34),''''),chr(7),' ') AS string_result
+FROM 
+       A_Testing_Session v0
+INNER JOIN A_Test t0 ON t0.devrevstep = v0.devrevstep AND (t0.program_name = v0.program_name or t0.program_name is null or v0.program_name is null)  AND (t0.temperature = v0.temperature OR (t0.temperature IS NULL AND v0.temperature IS NULL))
+INNER JOIN A_Device_Testing dt ON v0.lao_start_ww + 0 = dt.lao_start_ww AND v0.ts_id + 0 = dt.ts_id
+LEFT JOIN A_String_Result str ON v0.lao_start_ww = str.lao_start_ww AND v0.ts_id = str.ts_id AND dt.dt_id = str.dt_id AND t0.t_id = str.t_id
+WHERE 1=1
+ AND      v0.valid_flag = 'Y' 
+ AND      t0.test_name Like 'DFF_%' 
+ AND      v0.test_start_date_time >= SYSDATE - 180
+ AND      v0.lot In (##ENG_IDS##)
+ AND      v0.operation In (##OPERATIONS##) 

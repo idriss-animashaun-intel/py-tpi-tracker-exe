@@ -1,0 +1,470 @@
+//!
+Clear Log();
+Close All( Data Tables, NoSave );
+Close All( Journals, NoSave );
+Close All( Reports, NoSave );
+
+
+/////////// CONFIG SECTION ///////////////
+priority1Save = "##SAVE_LOC##_priority1.jrn";
+priority2Save = "##SAVE_LOC##_priority2.jrn";
+allGraphsSave = "##SAVE_LOC##_allGraphs.jrn";
+pairedTtestSave = "##SAVE_LOC##_pairedTtest.jmp";
+matchedWaferTableSave = "##SAVE_LOC##_matchedWaferTable.jmp";
+splitTableSave = "##SAVE_LOC##_splitTable.jmp";
+mainTableOpen = "##RAW_PARAM##";
+
+old_new_list = {##LOT_OP_LIST##};
+Params={
+    ##PARAM_LIST##
+};
+oldColNames={
+    ##PARAM_LIST_OLD##
+};
+newColNames={
+    ##PARAM_LIST_NEW##
+};
+
+//Script Start
+mainTable = Open(mainTableOpen);
+mainTable << Set Name("O2N_distributions");
+current data table(mainTable);
+
+//  Paired TTEST section
+paired_ttest_dt = New Table( "paired_ttest",
+    Add Rows( N Items(newColNames)),
+    New Column( "param_name", Character),
+    New Column( "pvalue", Numeric, "Continuous", Format( "Best", 5 ), Set Values( [] ) ),
+    New Column( "rsquare", Numeric, "Continuous", Format( "Best", 5 ), Set Values( [] ) ),
+    New Column( "Mean_Difference", Numeric, "Continuous", Format( "Best", 10 ), Set Values( [] ) ),
+    New Column( "mean_diff_in_precent", Numeric, "Continuous", Format( "Percent", 12,5 ), Set Values( [] ) ),
+    New Column( "mean_diff_in_precent_abs", Numeric, "Continuous", Format( "Percent", 12, 2 ), Set Values( [] ) ),
+    New Column( "welch_pvalue", Numeric, "Continuous", Format( "Best",5 ), Set Values( [] ) ),
+    New Column( "num_outliers", Numeric, "Continuous", Format( "Best", 5 ), Set Values( [] ) ),
+    New Column( "num_observations", Numeric, "Continuous", Format( "Best", 5 ), Set Values( [] ) ),
+    New Column( "PMM", Numeric, "Continuous", Format( "Best", 5 ), Set Values( [] ) )
+);
+
+current data table(mainTable);
+
+// Need to remove lots if there's a mismatch (say old ran two wafers, new only one).
+lotOpTable = mainTable << Summary
+(
+	Group( :LOT_OP, :WFR, :Name( "PROGRAM_NAME" )),
+	Freq( "None" ),
+	Weight( "None" )
+);
+
+lotOpTable << Select Where(Contains(old_new_list,:LOT_OP));
+lotOpTableReduced = lotOpTable << Subset(
+    Selected Rows(), 
+    All columns()
+);
+
+waferTable = lotOpTableReduced << Summary
+(
+	Group( :WFR),
+	Freq( "None" ),
+	Weight( "None" )
+);
+
+waferTable << Select Where(:Name("N Rows") == 2);
+matchedWaferTable = mainTable << Subset(
+    Selected Rows(), 
+    All columns(),
+    Output Table("matchedWaferTable")
+);
+
+Close(lotOpTable, No Save);
+Close(waferTable, No Save);
+
+cellidfound=0;
+nTotalCols = N Cols(matchedWaferTable);
+AllmatchedWaferTableCols = matchedWaferTable << Get Column Names;
+
+for(i_column=1, i_column<=nTotalCols, i_column++,
+		if(contains(AllmatchedWaferTableCols[i_column],"CELL_ID"),
+			cellidfound=1 ));
+
+if (cellidfound==0,matchedWaferTable << New Column("CELL_ID",Character,"Nominal"));
+
+
+splitTable = matchedWaferTable << Split(
+    Split By( :LOT_OP),
+    Split( :CELL_ID, eval(Params)),
+    Group( :WFR_X_Y),
+    Remaining Columns( Drop All ),
+    Sort by Column Property,
+    Output Table("splitTable")
+);
+
+colnames_all = splitTable << get column names();
+for (i=1, i<=N Items(colnames_all),i++,
+    Column(splitTable,colnames_all[i]) << Set Property( "Missing Value Codes", {-9999,-8888,-5555, -999, -555} );
+);
+
+// N Col is 2 graphs per row
+mainWindow = New Window( "All graphs", lineup = Lineup Box(N Col(3)));
+
+// Open new window for the problematic parametrics
+priority1Window = New Window( "Priority 1", lineupProb1 = Lineup Box( N Col( 2 ) ) );
+priority2Window = New Window( "Priority 2", lineupProb2 = Lineup Box( N Col( 2 ) ) );
+
+// For each parameter we want to filter out jank columns/data (mean == 0, outliers etc.)
+for (i=1, i<=N Items(Params),i++,
+    // check column mean for each of the TP - if empty, skip this param
+    is_empty = 0;
+    col_mean1 = Col Mean(Column(splitTable,oldColNames[i]));
+    col_mean2 = Col Mean(Column(splitTable,newColNames[i]));
+    
+    if (Is Missing(col_mean1) | (col_mean1 == 0), is_empty = 1);
+    if (Is Missing(col_mean2) | (col_mean2 == 0), is_empty = 1);
+
+    // if you found missing col, skip to the next loop
+    if (is_empty== 1, Continue());
+    
+    // filter data for old outliers
+    current data table(splitTable);
+    Column(splitTable,oldColNames[i]) << Set Selected( 1 );
+    obj = splitTable << Explore Outliers(
+        Y(Column(splitTable,oldColNames[i])),
+        Tail Quantile( 0.3 ),
+        Quantile Range Outliers
+    );
+    
+    num_outliers = Report( obj )[Number Col Box( 5 )][1]; 
+    low_thresh = Report( obj )[Number Col Box( 3 )][1]; 
+    high_thresh = Report( obj )[Number Col Box( 4 )][1]; 
+    
+    // If there are outliers, we want to exclude and hide the data
+    if (num_outliers != 0,
+        splitTable << Select Where( ascolumn(splitTable,oldColNames[i]) < low_thresh |  ascolumn(splitTable,oldColNames[i]) > high_thresh)<<exclude<<hide;
+    );
+    outlierReport = Report(obj);
+    outlierReport << closeWindow;
+    //show(num_outliers);
+
+    // // Second filter - not currently used but might be requested soon.
+    // // filter data for new outliers
+    // Column(splitTable,newColNames[i]) << Set Selected( 1 );
+    // obj = splitTable << Explore Outliers(
+    //     Y(Column(splitTable,newColNames[i])),
+    //     Tail Quantile( 0.3 ),
+    //     Quantile Range Outliers
+    // );
+    // num_outliers = Report( obj )[Number Col Box( 5 )][1]; 
+    // low_thresh = Report( obj )[Number Col Box( 3 )][1]; 
+    // high_thresh = Report( obj )[Number Col Box( 4 )][1]; 
+    // 
+    // // If there are outliers, we want to exclude and hide the data
+    // if (num_outliers != 0,
+    //     splitTable << Select Where( ascolumn(splitTable,newColNames[i]) < low_thresh |  ascolumn(splitTable,newColNames[i]) > high_thresh)<<exclude<<hide;
+    // );
+    // outlierReport = Report(obj);
+    // outlierReport << closeWindow;
+    // //show(num_outliers);
+
+    //  X by Y. Need it for RSquare and the main plot
+    lineup << append(
+        x_vs_y = splitTable << Bivariate(
+            Y(Column(splitTable,oldColNames[i])),
+            X(Column(splitTable,newColNames[i])),
+			SendToReport(
+					Dispatch(
+						{},
+						"Bivar Plot",
+						FrameBox,
+						{Row Legend(
+							Column("CELL_ID " || old_new_list[1]),
+							Color( 1 ),
+							Color Theme( "JMP Vibrant" ),
+							Marker( 0 ),
+							Marker Theme( "" ),
+							Continuous Scale( 0 ),
+							Reverse Scale( 0 ),
+							Excluded Rows( 0 )
+						)}
+					)
+				),
+			
+            Fit Line( 1 ),
+            Fit Special( Intercept( 0 ), Slope( 1 ), {Line Color( {61, 174, 70} )} )
+        );
+    ); // append
+
+    // matched pair
+    lineup << append(
+        matchedPairWindow = splitTable << Matched Pairs(
+            Y(
+                Column(splitTable,oldColNames[i]),
+                Column(splitTable,newColNames[i]),
+            ),
+            Reference Frame( 0 )
+        ); // matched pairs
+    ); // append
+
+    // variance check
+    col = Column(matchedWaferTable,Params[i]);
+    lineup << append(
+        varianceWindow = matchedWaferTable << 
+            Oneway(
+                Y(col),
+                X( :Name( "LOT_OP" ) ),
+                Unequal Variances( 1 ),
+                Std Dev Lines( 1 )
+            );
+        );
+
+    // extract parameters from the graphs
+    mystring = Report( matchedPairWindow )[String Col Box( 1 )][1];   
+    mypvalue = Report( matchedPairWindow )[Number Col Box( 3 )][1];  
+    mymean = Report( matchedPairWindow )[Number Col Box( 1 )][3]; 
+    mymean_old = Report( matchedPairWindow )[Number Col Box( 1 )][1]; 
+    mywelch_pvalue = Report( varianceWindow )["Tests that the Variances are Equal"]["Welch's Test"][NumberColBox("Prob > F")][1];  
+    myRsquare = Report( x_vs_y )["Linear Fit"]["Summary of Fit"][Number Col Box( 1 )][1];    
+    num_observations = Report( x_vs_y )["Linear Fit"]["Summary of Fit"][1][2][5];
+    mean1 = Report( varianceWindow )["Means and Std Deviations"][NumberColBox("Mean")][1];  
+    mean2 = Report( varianceWindow )["Means and Std Deviations"][NumberColBox("Mean")][2]; 
+    std1 = Report( varianceWindow )["Means and Std Deviations"][NumberColBox("Std Dev")][1];   
+    //std2 = Report( varianceWindow )["Means and Std Deviations"][NumberColBox("Std Dev")][2];
+    pmm = (mean2 - mean1)/std1;
+
+    // write it into the table
+    paired_ttest_dt:param_name[i] = mystring;
+    paired_ttest_dt:pvalue[i] = mypvalue;
+    paired_ttest_dt:rsquare[i] = myRsquare;
+    paired_ttest_dt:Mean_Difference[i] = mymean;
+    paired_ttest_dt:welch_pvalue[i] = mywelch_pvalue;
+    paired_ttest_dt:mean_diff_in_precent[i] = mymean / mymean_old;
+    paired_ttest_dt:mean_diff_in_precent_abs[i] = abs(mymean / mymean_old);
+    paired_ttest_dt:num_outliers[i] = num_outliers;
+    paired_ttest_dt:num_observations[i] = num_observations;
+    paired_ttest_dt:PMM[i] = pmm;
+
+    delta_precent_abs = abs(mymean / mymean_old);
+    
+    flagPriority1 = 0;
+    flagPriority2 = 0;
+    
+    // problematic ones: have a seperate window for ttest and welch - priority 1
+    If( mypvalue < 0.05  & delta_precent_abs >= 0.01,
+        flagPriority1 = 1,
+        If(mywelch_pvalue < 0.05, 
+            flagPriority1 = 1)
+    );
+
+    // problematic ones: have a seperate window for rsquare - priority 2
+    If( myRsquare < 0.9 ,flagPriority2 = 1);
+    if (flagPriority1 == 1,flagPriority2 = 0); // if its already a ttest failure
+
+    // determine the right string on the graph
+    string_graph="";
+    If( mypvalue < 0.05 & myRsquare < 0.9 & mywelch_pvalue < 0.05,
+        string_graph="Fails all 3 statistics",
+        If( mypvalue < 0.05 & myRsquare < 0.9,
+            string_graph="Fails 2 statistics: ttest and RSquare",
+            If( mywelch_pvalue < 0.05 & mypvalue < 0.05,
+                string_graph="Fails 2 statistics: ttest and welch",
+                If( mywelch_pvalue < 0.05 & myRsquare < 0.9,
+                    string_graph="Fails 2 statistics: welch and RSquare",
+                    If( mypvalue < 0.05,
+                        string_graph="Fails 1 statistics: ttest",
+                        If( mywelch_pvalue < 0.05,
+                            string_graph="Fails 1 statistics: welch",
+                            If( myRsquare < 0.9,
+                                string_graph="Fails 1 statistics: Rsquare",
+                                string_graph=""
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    );
+
+    If( flagPriority1 == 1,
+        //  X by Y
+        lineupProb1 << append(
+            randomWindow1 = splitTable << Bivariate(
+                Y(Column(splitTable,oldColNames[i])),
+                X(Column(splitTable,newColNames[i])),
+				
+                Fit Line( 1 ),
+				SendToReport(
+					Dispatch(
+						{},
+						"Bivar Plot",
+						FrameBox,
+						{Row Legend(
+							Column("CELL_ID " || old_new_list[1]),
+							Color( 1 ),
+							Color Theme( "JMP Vibrant" ),
+							Marker( 0 ),
+							Marker Theme( "" ),
+							Continuous Scale( 0 ),
+							Reverse Scale( 0 ),
+							Excluded Rows( 0 )
+						)}
+					)
+				),
+                SendToReport( Dispatch( {}, "Linear Fit", OutlineBox, {Close( 1 )} ) ),
+                Fit Special( Intercept( 0 ), Slope( 1 ), {Line Color( {61, 200, 70} )} ),
+                SendToReport( Dispatch( {}, "Linear Fit", OutlineBox(2), {Close( 1 )} ) ),
+                SendToReport(
+                    Dispatch(
+                        {},
+                        "Bivar Plot",
+                        FrameBox,
+                        Add Text Annotation(
+                            Text( string_graph ),
+                            Fixed Size( 0 ),
+                            Text Box( {4, 5, 200, 29} ),
+                            Filled( 0 )
+                        )
+                    )
+                )
+            );
+        ) // no semi colon, part of an if statement...
+    ); // append
+
+    If( flagPriority2 == 1,
+        //  X by Y
+        lineupProb2 << append(
+            randomWindow1 = splitTable << Bivariate(
+                Y(Column(splitTable,oldColNames[i])),
+                X(Column(splitTable,newColNames[i])),
+				
+                Fit Line( 1 ),
+				SendToReport(
+					Dispatch(
+						{},
+						"Bivar Plot",
+						FrameBox,
+						{Row Legend(
+							Column("CELL_ID " || old_new_list[1]),
+							Color( 1 ),
+							Color Theme( "JMP Vibrant" ),
+							Marker( 0 ),
+							Marker Theme( "" ),
+							Continuous Scale( 0 ),
+							Reverse Scale( 0 ),
+							Excluded Rows( 0 )
+						)}
+					)
+				),
+                //SendToReport( Dispatch( {}, "Linear Fit", OutlineBox, {Close( 1 )} ) ),
+                Fit Special( Intercept( 0 ), Slope( 1 ), {Line Color( {61, 174, 70} )} ),
+                SendToReport( Dispatch( {}, "Linear Fit", OutlineBox(2), {Close( 1 )} ) ),
+                SendToReport(
+                    Dispatch(
+                        {},
+                        "Bivar Plot",
+                        FrameBox,
+                        Add Text Annotation(
+                            Text( string_graph ),
+                            Fixed Size( 0 ),
+                            Text Box( {4, 5,200, 29} ),
+                            Filled( 0 )
+                        )
+                    )
+                )
+            );
+        )
+    ); // append
+    splitTable<< Select All Rows;
+    
+);
+
+// Save and close tables that are no longer updated
+priority1Window << save journal(priority1Save);
+priority2Window << save journal(priority2Save);
+mainWindow << save journal(allGraphsSave);
+matchedWaferTable << save as (matchedWaferTableSave);
+splitTable << save as (splitTableSave);
+
+priority1Window << Close Window;
+priority2Window << Close Window;
+mainWindow << Close Window;
+Close(matchedWaferTable, No Save);
+Close(splitTable, No Save);
+Close(mainTable, No Save);
+
+// create a new column for suspecious criteria
+paired_ttest_dt << New Column( "criteria",
+    Character, 
+    formula(If( :pvalue < 0.05 & :rsquare < 0.9 & :welch_pvalue < 0.05,
+            "Fails all 3 statistics",
+            If( :pvalue < 0.05 & :rsquare < 0.9,
+                "Fails 2 statistics: ttest and RSquare",
+                If( :welch_pvalue < 0.05 & :pvalue < 0.05,
+                    "Fails 2 statistics: ttest and welch",
+                    If( :welch_pvalue < 0.05 & :rsquare < 0.9,
+                        "Fails 2 statistics: welch and RSquare",
+                        If( :pvalue < 0.05,
+                            "Fails 1 statistics: ttest",
+                            If( :welch_pvalue < 0.05,
+                                "Fails 1 statistics: welch",
+                                If( :rsquare < 0.9,
+                                    "Fails 1 statistics: Rsquare",
+                                    "OK"
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+    ),
+    Set Property(
+        "Value Ordering",
+        {
+            "Fails all 3 statistics",
+            "Fails 2 statistics: ttest and RSquare",
+            "Fails 2 statistics: ttest and welch",
+            "Fails 2 statistics: welch and RSquare",
+            "Fails 1 statistics: ttest",
+            "Fails 1 statistics: welch",
+            "Fails 1 statistics: Rsquare",
+            "OK"
+        }
+    )
+);
+
+paired_ttest_dt << Sort(
+    By( :criteria, :mean_diff_in_precent_abs),
+    Replace Table,
+    Order( Ascending, Descending )
+);
+
+// color the suspecious ones
+paired_ttest_dt:criteria << Set Property(
+    "Value Colors", // assign the value colors
+    {"Fails all 3 statistics" = Orange,
+    "Fails 2 statistics: ttest and RSquare"  = Light Orange,
+    "Fails 2 statistics: ttest and welch" = Yellow,
+    "Fails 2 statistics: welch and RSquare" = Light Yellow,
+    "Fails 1 statistics: ttest"  = Light Blue,
+    "Fails 1 statistics: welch"  = Blue,
+    "Fails 1 statistics: Rsquare" = light Purple,
+    "OK" = White}
+);
+
+paired_ttest_dt << Color by Column( :criteria );
+Wait( 2 );
+paired_ttest_dt << Color Rows by Row State;
+
+// fix size of string cell
+widthCell = paired_ttest_dt:param_name << Get Display Width;
+paired_ttest_dt:param_name<< Set Display Width( widthCell );
+ 
+widthCell = paired_ttest_dt:criteria << Get Display Width;
+paired_ttest_dt:criteria<< Set Display Width( 2 * widthCell );
+
+// color cells with shift >|1%| 
+paired_ttest_dt:mean_diff_in_precent  << color cells( "Red", paired_ttest_dt << get rows where( As Column( paired_ttest_dt, mean_diff_in_precent ) >= 0.01 ));
+paired_ttest_dt:mean_diff_in_precent  << color cells( "Red", paired_ttest_dt << get rows where( As Column( paired_ttest_dt, mean_diff_in_precent ) <= -0.01 ));
+
+paired_ttest_dt << save as (pairedTtestSave);
+Close(paired_ttest_dt, No Save);
+
+Quit();

@@ -1,0 +1,70 @@
+spf_sum = Function(
+// Function arg
+{rootpath},
+// Local vars
+{},
+// Body of code
+
+//---------------------
+//Get current table
+//---------------------
+table = current data table(Data Table ("0_RawData"));
+table = current data table();
+
+//---------------------
+// Get list of Wafers that are in all lots
+//---------------------
+summarize( WFRLOTLIST = By (:WAFER_ID,:LOT_OP));
+WFRLIST = WFRLOTLIST[1,0];
+summarize( LOTLIST = By (:LOT_OP) );
+NLOTS = N items(LOTLIST);
+
+FINAL_WFR_LIST = {};
+For (i=1, i < N items(WFRLIST), i++,
+    if ( N rows(Loc(WFRLIST,WFRLIST[i])) == NLOTS, Insert Into(FINAL_WFR_LIST ,"WFR("||WFRLIST[i]||")"),"");
+);
+
+
+//---------------------
+// Create Summary Table LOT/PRAGRAM/WFRS
+//---------------------
+Data Table( "0_RawData" ) << Summary( Group( :LOT_OP, :TESTPROGRAM ),N,Subgroup( :WAFER_ID ), Output Table Name("0_RawData_Summary"));
+
+dt_summary = current data table(Data Table ("0_RawData_Summary"));
+dt_summary = current data table();
+
+//---------------------
+// CLean_up cloumn names and highlight green used wafers
+//---------------------
+For(i=1,i<=ncol(dt_summary),i++,
+     colname = Column(i) << get name;
+     newcolname = munger(colname,1,"N(","WFR(");
+     Column(i) << Set Name(newcolname);
+     dt_summary << clear select;  
+     if (N rows(LOC(FINAL_WFR_LIST,newcolname)) >= 1, column(newcolname) << Set Selected(1) << Color Cells(Green););
+);
+
+dt_summary << Delete Columns("N Rows");
+
+dt_summary << Clear Column Selection;  
+ 
+//show properties(dt_summary);
+
+data_report = tablebox(dt_summary << get as report);
+//data_report = dt_summary << get as report;
+
+//data table(dt_summary) << journal;
+//current journal() << Set Window Title ("Summary");
+ 
+data_summary_tab = outlinebox("SUMMARY_USED_WFRS_HIGHLIGHTED_GREEN",data_report );
+
+//---------------------
+// Print picture to ppt
+//---------------------
+
+allwfr_Kappa_tab << append(data_summary_tab); 
+
+
+//data_summary_tab << save picture("{{PIC}}0_SUMMARY_USED_WFRS_HIGHLIGHTED_GREEN.jpg", jpg);
+close(dt_summary, no save);
+);
