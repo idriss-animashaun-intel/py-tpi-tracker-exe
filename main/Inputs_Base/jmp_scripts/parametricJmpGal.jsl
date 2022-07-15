@@ -239,7 +239,8 @@ for (i=1, i<=N Items(Params),i++,
     paired_ttest_dt:rsquare[i] = myRsquare;
     paired_ttest_dt:Mean_Difference[i] = mymean;
     paired_ttest_dt:welch_pvalue[i] = mywelch_pvalue;
-    paired_ttest_dt:mean_diff_in_precent[i] = mymean / mymean_old;
+    if(mymean_old==0,paired_ttest_dt:mean_diff_in_precent[i] = 999,
+    paired_ttest_dt:mean_diff_in_precent[i] = mymean / mymean_old);
     paired_ttest_dt:mean_diff_in_precent_abs[i] = abs(mymean / mymean_old);
     paired_ttest_dt:num_outliers[i] = num_outliers;
     paired_ttest_dt:num_observations[i] = num_observations;
